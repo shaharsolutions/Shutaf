@@ -5,7 +5,8 @@ import {
     getDoc, 
     updateDoc, 
     arrayUnion, 
-    arrayRemove 
+    arrayRemove,
+    onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // State Management
@@ -810,38 +811,58 @@ async function loadPlanFromStorage() {
     renderCurrentPlan();
     renderActiveWorkout();
 
-    // 2. Sync from Firebase (Cloud updates)
+    // 2. Sync from Firebase (Real-time updates)
     try {
         const userRef = doc(db, "users", "default_user");
-        const docSnap = await getDoc(userRef);
         
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            console.log("Data loaded from Firebase");
-            
-            // If Firebase is newer or local is empty, update local
-            if (data.workoutPlans) {
-                workoutPlans = data.workoutPlans;
-                localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
+        // Use onSnapshot for real-time synchronization across devices
+        onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                console.log("Data synced from Firebase");
+                
+                let needsReRender = false;
+
+                // Sync plans
+                if (data.workoutPlans) {
+                    // Simple check to see if we should update local plans
+                    // In a production app, we'd use timestamps or deeper comparison
+                    if (JSON.stringify(workoutPlans) !== JSON.stringify(data.workoutPlans)) {
+                        workoutPlans = data.workoutPlans;
+                        localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
+                        needsReRender = true;
+                    }
+                }
+                
+                // Sync rest time
+                if (data.restTime && data.restTime !== restTime) {
+                    restTime = data.restTime;
+                    localStorage.setItem('fitbud_rest_time', restTime);
+                    const restInput = document.getElementById('global-rest-time');
+                    if (restInput) restInput.value = restTime;
+                    needsReRender = true;
+                }
+                
+                // Sync history
+                if (data.history) {
+                    const localHistory = localStorage.getItem('fitbud_history');
+                    if (localHistory !== JSON.stringify(data.history)) {
+                        localStorage.setItem('fitbud_history', JSON.stringify(data.history));
+                        renderHistory();
+                    }
+                }
+                
+                if (needsReRender) {
+                    renderWorkoutsList();
+                    renderCurrentPlan();
+                    renderActiveWorkout();
+                }
             }
-            if (data.restTime) {
-                restTime = data.restTime;
-                localStorage.setItem('fitbud_rest_time', restTime);
-                const restInput = document.getElementById('global-rest-time');
-                if (restInput) restInput.value = restTime;
-            }
-            if (data.history) {
-                localStorage.setItem('fitbud_history', JSON.stringify(data.history));
-            }
-            
-            // Re-render with cloud data
-            renderWorkoutsList();
-            renderCurrentPlan();
-            renderActiveWorkout();
-            renderHistory();
-        }
+        }, (error) => {
+            console.error("Real-time sync error:", error);
+        });
     } catch (e) {
-        console.error("Error loading from Firebase:", e);
+        console.error("Error setting up Firebase sync:", e);
     }
 }
 
