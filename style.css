@@ -907,9 +907,11 @@ footer {
 
 /* Drag and Drop Styles */
 .exercise-item.dragging {
-    opacity: 0.4;
-    border: 2px dashed var(--accent-color);
-    background: rgba(56, 189, 248, 0.1);
+    opacity: 0.6;
+    border: 2px solid var(--accent-color);
+    background: var(--secondary-bg);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
 }
 
 .exercise-item.over {
@@ -920,13 +922,16 @@ footer {
 .drag-handle {
     cursor: grab;
     margin-inline-end: 15px;
-    padding: 10px 5px;
+    padding: 12px 8px;
     color: var(--text-secondary);
-    font-size: 18px;
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: var(--transition);
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .drag-handle:hover {

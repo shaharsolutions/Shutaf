@@ -739,6 +739,11 @@ function renderCurrentPlan() {
         item.addEventListener('drop', handleDrop);
         item.addEventListener('dragend', handleDragEnd);
 
+        // Touch events for mobile
+        item.addEventListener('touchstart', handleTouchStart, { passive: false });
+        item.addEventListener('touchmove', handleTouchMove, { passive: false });
+        item.addEventListener('touchend', handleTouchEnd);
+
         fragment.appendChild(item);
     });
     
@@ -1388,16 +1393,17 @@ function customConfirm(message, onConfirm, onCancel) {
 let dragSourceEl = null;
 
 function initDragAndDrop() {
-    // This is called on DOMContentLoaded, 
-    // but the actual items are added dynamically in renderCurrentPlan.
-    // We already added listeners there.
+    // Listeners are added dynamically in renderCurrentPlan
 }
 
 function handleDragStart(e) {
     this.classList.add('dragging');
     dragSourceEl = this;
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', this.dataset.index);
+    
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', this.dataset.index);
+    }
     
     // Add a slight delay to ensure the ghost image is created correctly
     setTimeout(() => {
@@ -1409,11 +1415,30 @@ function handleDragOver(e) {
     if (e.preventDefault) {
         e.preventDefault();
     }
-    e.dataTransfer.dropEffect = 'move';
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+    }
+    
+    // Visual feedback for live reordering
+    const draggingItem = document.querySelector('.exercise-item.dragging');
+    if (draggingItem && draggingItem !== this) {
+        const list = elements.currentPlanList;
+        const children = Array.from(list.children);
+        const draggingIndex = children.indexOf(draggingItem);
+        const targetIndex = children.indexOf(this);
+        
+        if (draggingIndex < targetIndex) {
+            this.after(draggingItem);
+        } else {
+            this.before(draggingItem);
+        }
+    }
+    
     return false;
 }
 
 function handleDragEnter(e) {
+    if (e.preventDefault) e.preventDefault();
     this.classList.add('over');
 }
 
@@ -1425,14 +1450,9 @@ function handleDrop(e) {
     if (e.stopPropagation) {
         e.stopPropagation();
     }
+    if (e.preventDefault) e.preventDefault();
 
-    if (dragSourceEl !== this) {
-        const fromIndex = parseInt(dragSourceEl.dataset.index);
-        const toIndex = parseInt(this.dataset.index);
-        
-        reorderExercises(fromIndex, toIndex);
-    }
-
+    finishReorder();
     return false;
 }
 
@@ -1446,17 +1466,83 @@ function handleDragEnd(e) {
     });
 }
 
-function reorderExercises(fromIndex, toIndex) {
+// Touch Support for Mobile
+let touchStartY = 0;
+let touchCurrentY = 0;
+
+function handleTouchStart(e) {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    
+    // Check if it's actually the handle or a button inside the card
+    if (e.target.closest('.item-actions')) return;
+
+    dragSourceEl = this;
+    this.classList.add('dragging');
+    touchStartY = e.touches[0].clientY;
+    
+    // Vibrate if supported
+    if (window.navigator.vibrate) window.navigator.vibrate(20);
+}
+
+function handleTouchMove(e) {
+    if (!dragSourceEl) return;
+    
+    const touch = e.touches[0];
+    touchCurrentY = touch.clientY;
+    
+    // Prevent scrolling while dragging
+    e.preventDefault();
+    
+    // Find the element at the current touch position
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!target) return;
+    
+    const item = target.closest('.exercise-item');
+    if (item && item !== dragSourceEl) {
+        const list = elements.currentPlanList;
+        const children = Array.from(list.children);
+        const draggingIndex = children.indexOf(dragSourceEl);
+        const targetIndex = children.indexOf(item);
+        
+        if (draggingIndex < targetIndex) {
+            item.after(dragSourceEl);
+        } else {
+            item.before(dragSourceEl);
+        }
+    }
+}
+
+function handleTouchEnd(e) {
+    if (!dragSourceEl) return;
+    
+    dragSourceEl.classList.remove('dragging');
+    finishReorder();
+    dragSourceEl = null;
+}
+
+function finishReorder() {
+    const list = elements.currentPlanList;
+    const items = Array.from(list.querySelectorAll('.exercise-item'));
+    
     const plan = workoutPlans.find(p => p.id === selectedWorkoutId);
     if (!plan) return;
     
-    const exercises = plan.exercises;
-    const movedItem = exercises.splice(fromIndex, 1)[0];
-    exercises.splice(toIndex, 0, movedItem);
+    // Get new order based on current DOM state
+    const newExercises = [];
+    items.forEach(item => {
+        const originalIndex = parseInt(item.dataset.index);
+        newExercises.push(plan.exercises[originalIndex]);
+    });
     
+    plan.exercises = newExercises;
+    
+    // Re-render to update data-index attributes
     renderCurrentPlan();
     saveAllPlans();
 }
+
+
 
 // Expose functions to global window scope for HTML event handlers
 window.switchTab = switchTab;
