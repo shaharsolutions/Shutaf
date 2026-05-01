@@ -726,8 +726,10 @@ function renderCurrentPlan() {
         `;
 
         // Drag events
+        // Drag events
         item.addEventListener('dragstart', function(e) {
-            if (!e.target.closest('.drag-handle')) {
+            // Don't start drag if clicking on buttons or actions
+            if (e.target.closest('button, .item-actions, input')) {
                 e.preventDefault();
                 return false;
             }
@@ -1412,14 +1414,16 @@ function handleDragStart(e) {
 }
 
 function handleDragOver(e) {
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
-    if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move';
-    }
+    if (e.preventDefault) e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    if (e.preventDefault) e.preventDefault();
+    this.classList.add('over');
     
-    // Visual feedback for live reordering
+    // Live reordering on desktop - more stable on dragenter
     const draggingItem = document.querySelector('.exercise-item.dragging');
     if (draggingItem && draggingItem !== this) {
         const list = elements.currentPlanList;
@@ -1433,13 +1437,6 @@ function handleDragOver(e) {
             this.before(draggingItem);
         }
     }
-    
-    return false;
-}
-
-function handleDragEnter(e) {
-    if (e.preventDefault) e.preventDefault();
-    this.classList.add('over');
 }
 
 function handleDragLeave(e) {
@@ -1478,12 +1475,20 @@ function handleTouchStart(e) {
     if (e.target.closest('.item-actions')) return;
 
     dragSourceEl = this;
-    this.classList.add('dragging');
-    touchStartY = e.touches[0].clientY;
     
-    // Vibrate if supported
-    if (window.navigator.vibrate) window.navigator.vibrate(20);
+    // Delay adding dragging class slightly to avoid pointer-events: none 
+    // interrupting the touch start sequence in some browsers
+    setTimeout(() => {
+        if (dragSourceEl) {
+            dragSourceEl.classList.add('dragging');
+            if (window.navigator.vibrate) window.navigator.vibrate(20);
+        }
+    }, 50);
+    
+    touchStartY = e.touches[0].clientY;
 }
+
+let autoScrollInterval = null;
 
 function handleTouchMove(e) {
     if (!dragSourceEl) return;
@@ -1494,8 +1499,32 @@ function handleTouchMove(e) {
     // Prevent scrolling while dragging
     e.preventDefault();
     
+    // Auto-scroll logic
+    const scrollThreshold = 100;
+    const scrollSpeed = 15;
+    if (touch.clientY < scrollThreshold) {
+        if (!autoScrollInterval) {
+            autoScrollInterval = setInterval(() => window.scrollBy(0, -scrollSpeed), 20);
+        }
+    } else if (touch.clientY > window.innerHeight - scrollThreshold) {
+        if (!autoScrollInterval) {
+            autoScrollInterval = setInterval(() => window.scrollBy(0, scrollSpeed), 20);
+        }
+    } else {
+        clearInterval(autoScrollInterval);
+        autoScrollInterval = null;
+    }
+    
+    // Temporarily disable pointer events on dragging item to see what's underneath
+    const originalPointerEvents = dragSourceEl.style.pointerEvents;
+    dragSourceEl.style.pointerEvents = 'none';
+    
     // Find the element at the current touch position
     const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // Restore pointer events
+    dragSourceEl.style.pointerEvents = originalPointerEvents;
+    
     if (!target) return;
     
     const item = target.closest('.exercise-item');
@@ -1516,6 +1545,9 @@ function handleTouchMove(e) {
 function handleTouchEnd(e) {
     if (!dragSourceEl) return;
     
+    clearInterval(autoScrollInterval);
+    autoScrollInterval = null;
+    
     dragSourceEl.classList.remove('dragging');
     finishReorder();
     dragSourceEl = null;
@@ -1526,20 +1558,25 @@ function finishReorder() {
     const items = Array.from(list.querySelectorAll('.exercise-item'));
     
     const plan = workoutPlans.find(p => p.id === selectedWorkoutId);
-    if (!plan) return;
+    if (!plan || !plan.exercises) return;
     
-    // Get new order based on current DOM state
+    // Get new order based on current DOM state (using IDs for robustness)
     const newExercises = [];
     items.forEach(item => {
-        const originalIndex = parseInt(item.dataset.index);
-        newExercises.push(plan.exercises[originalIndex]);
+        const exerciseId = item.dataset.id;
+        const exercise = plan.exercises.find(ex => ex.id === exerciseId);
+        if (exercise) {
+            newExercises.push(exercise);
+        }
     });
     
-    plan.exercises = newExercises;
+    if (newExercises.length === plan.exercises.length) {
+        plan.exercises = newExercises;
+        saveAllPlans();
+    }
     
-    // Re-render to update data-index attributes
+    // Re-render to update data-index and ensure everything is in sync
     renderCurrentPlan();
-    saveAllPlans();
 }
 
 
