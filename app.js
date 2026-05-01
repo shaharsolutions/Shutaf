@@ -830,11 +830,15 @@ async function loadPlanFromStorage() {
                 const restInput = document.getElementById('global-rest-time');
                 if (restInput) restInput.value = restTime;
             }
+            if (data.history) {
+                localStorage.setItem('fitbud_history', JSON.stringify(data.history));
+            }
             
             // Re-render with cloud data
             renderWorkoutsList();
             renderCurrentPlan();
             renderActiveWorkout();
+            renderHistory();
         }
     } catch (e) {
         console.error("Error loading from Firebase:", e);
@@ -1115,13 +1119,7 @@ async function finishWorkout() {
     localStorage.setItem('fitbud_history', JSON.stringify(history));
     
     // Sync to Firebase
-    try {
-        const userRef = doc(db, "users", "default_user");
-        await setDoc(userRef, { history: history }, { merge: true });
-        console.log("History synced to Firebase");
-    } catch (e) {
-        console.error("Error syncing history to Firebase:", e);
-    }
+    syncHistoryToFirebase(history);
     
     // Clear active state
     activeWorkoutState = {};
@@ -1130,6 +1128,17 @@ async function finishWorkout() {
     customAlert('האימון נשמר בהיסטוריה בהצלחה!', () => {
         switchTab('history');
     });
+}
+
+// Helper to sync history to Firebase
+async function syncHistoryToFirebase(history) {
+    try {
+        const userRef = doc(db, "users", "default_user");
+        await setDoc(userRef, { history: history }, { merge: true });
+        console.log("History synced to Firebase");
+    } catch (e) {
+        console.error("Error syncing history to Firebase:", e);
+    }
 }
 
 function renderHistory() {
@@ -1224,12 +1233,7 @@ function deleteHistoryItem(id) {
         renderHistory();
 
         // Sync to Firebase
-        try {
-            const userRef = doc(db, "users", "default_user");
-            await setDoc(userRef, { history: history }, { merge: true });
-        } catch (e) {
-            console.error("Error deleting from Firebase:", e);
-        }
+        syncHistoryToFirebase(history);
     });
 }
 
@@ -1307,12 +1311,7 @@ function editHistoryDate(id) {
             modal.style.display = 'none';
             
             // Sync to Firebase
-            try {
-                const userRef = doc(db, "users", "default_user");
-                await setDoc(userRef, { history: history }, { merge: true });
-            } catch (e) {
-                console.error("Error updating history in Firebase:", e);
-            }
+            syncHistoryToFirebase(history);
         }
     };
 }
