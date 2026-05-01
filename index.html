@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>שותף - אפליקציית הכושר שלך</title>
+    <meta name="description" content="תכנן ועקוב אחר האימונים שלך בצורה פשוטה וחכמה עם שותף.">
+    
+    <!-- Performance: Preconnect and Preload -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Preload critical fonts -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Rubik:wght@400;500;700&display=swap" as="style">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style">
+    <link rel="preload" href="style.css" as="style">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Rubik:wght@400;500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    
+    <!-- PWA Manifest & Icons -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-512.png">
+    <meta name="theme-color" content="#0f172a">
+    
+    <link rel="stylesheet" href="style.css">
+    <noscript>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Rubik:wght@400;500;700&display=swap">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    </noscript>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Background decorative elements -->
+        <div class="bg-glow glow-1"></div>
+        <div class="bg-glow glow-2"></div>
+
+        <!-- Navigation Header -->
+        <header class="app-header">
+            <nav class="navbar">
+                <div class="logo">
+                    <i class="fa-solid fa-dumbbell"></i>
+                    <span>שו<span>תף</span></span>
+                </div>
+                <button id="install-btn" class="btn btn-primary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px;">
+                    <i class="fa-solid fa-download"></i> התקן אפליקציה
+                </button>
+            </nav>
+            <div class="nav-links">
+                <button id="nav-setup" class="nav-btn active" onclick="switchTab('setup')">
+                    <i class="fa-solid fa-sliders"></i>
+                    הגדרת אימון
+                </button>
+                <button id="nav-activity" class="nav-btn" onclick="switchTab('activity')">
+                    <i class="fa-solid fa-chart-line"></i>
+                    חלון פעילות
+                </button>
+                <button id="nav-history" class="nav-btn" onclick="switchTab('history')">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    היסטוריית אימונים
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Workout Setup Tab -->
+            <section id="setup-tab" class="tab-content active">
+                <!-- Workout Settings Card -->
+                <div class="glass-card settings-card" style="margin-bottom: 20px;">
+                    <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">
+                        <i class="fa-solid fa-gear"></i> הגדרות אימון
+                    </h2>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label for="global-rest-time">זמן מנוחה בין סטים (בשניות)</label>
+                        <input type="number" id="global-rest-time" min="5" max="300" value="60" placeholder="60" onchange="saveRestTime()">
+                    </div>
+                </div>
+
+                <div class="glass-card workouts-card" style="margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h2 class="section-title" style="font-size: 18px; margin: 0;">
+                            <i class="fa-solid fa-list-check"></i> האימונים שלי
+                        </h2>
+                        <button class="btn btn-primary" onclick="createNewWorkout()" style="padding: 8px 15px; width: auto; font-size: 14px;">
+                            <i class="fa-solid fa-plus"></i> אימון חדש
+                        </button>
+                    </div>
+                    <div id="workouts-list" class="workouts-list">
+                        <!-- List of saved workout plans will appear here -->
+                        <div class="empty-state" style="padding: 20px;">
+                            <p>עדיין לא נוצרו אימונים.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card" id="workout-editor-card" style="display: none;">
+                    <h1 class="section-title" id="editor-title"><i class="fa-solid fa-pen-to-square"></i> עריכת אימון</h1>
+                    
+                    <div class="form-group">
+                        <label for="workout-name-input">שם האימון</label>
+                        <input type="text" id="workout-name-input" placeholder="לדוגמה: אימון A, פלג גוף עליון..." oninput="updateWorkoutName()">
+                    </div>
+
+                    <form id="exercise-form" onsubmit="event.preventDefault(); addExercise();">
+                        <div class="form-group">
+                            <label for="exercise-name">שם התרגיל</label>
+                            <input type="text" id="exercise-name" placeholder="לדוגמה: לחיצת חזה, סקוואט..." required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sets-count">כמות סטים</label>
+                            <input type="number" id="sets-count" min="1" max="10" placeholder="כמה סטים?" required oninput="generateRepInputs()">
+                        </div>
+
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label class="checkbox-container" style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+                                <input type="checkbox" id="separate-sets" onchange="generateRepInputs()" style="width: auto;">
+                                <span>הגדרת משקל וחזרות לכל סט בנפרד</span>
+                            </label>
+                        </div>
+
+                        <div id="reps-inputs-container" class="reps-grid">
+                            <!-- Dynamic rep inputs will appear here -->
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="add-exercise-btn">
+                            <i class="fa-solid fa-plus"></i> הוסף תרגיל לאימון
+                        </button>
+                    </form>
+                </div>
+
+                <div class="glass-card plan-summary">
+                    <h2>האימון הנוכחי</h2>
+                    <div id="current-plan-list" class="exercise-list">
+                        <!-- List of added exercises will appear here -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-info-circle"></i>
+                            <p>עדיין לא נוספו תרגילים לאימון.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="plan-actions">
+                        <button class="btn btn-success" id="save-plan-btn" onclick="saveWorkoutPlan()" disabled>
+                            <i class="fa-solid fa-floppy-disk"></i> שמור תכנית אימונים
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Activity Tab -->
+            <section id="activity-tab" class="tab-content">
+                <!-- Mini Timer (Shown when floating timer is hidden) -->
+                <div id="mini-timer" class="mini-timer-bar" style="display: none;" onclick="expandTimer()">
+                    <div class="mini-timer-info">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                        <span>מנוחה פעילה:</span>
+                        <span id="mini-timer-display">01:00</span>
+                    </div>
+                    <button class="expand-btn">
+                        <i class="fa-solid fa-up-right-and-down-left-from-center"></i> הגדל
+                    </button>
+                </div>
+
+                <!-- Timer Widget -->
+                <div class="glass-card timer-widget" id="timer-widget" style="display: none;">
+                    <div class="timer-header">
+                        <span><i class="fa-solid fa-clock"></i> זמן מנוחה</span>
+                        <button class="close-timer" onclick="closeTimer()">&times;</button>
+                    </div>
+                    <div class="timer-display" id="timer-countdown">01:00</div>
+                    <div class="timer-controls">
+                        <button class="timer-btn" onclick="adjustTimer(-10)">-10s</button>
+                        <button class="timer-btn timer-btn-main" id="timer-toggle-btn" onclick="toggleTimer()">עצור</button>
+                        <button class="timer-btn" onclick="adjustTimer(10)">+10s</button>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <h1 class="section-title"><i class="fa-solid fa-play"></i> מעקב אימון פעיל</h1>
+                    
+                    <div id="active-workout-container">
+                        <!-- Active workout exercises will be rendered here -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-dumbbell"></i>
+                            <p>אין אימון פעיל. עבור ללשונית "הגדרת אימון" כדי ליצור תכנית.</p>
+                        </div>
+                    </div>
+                    <div class="workout-actions" id="workout-actions" style="display: none; margin-top: 20px;">
+                        <button class="btn btn-success" onclick="finishWorkout()">
+                            <i class="fa-solid fa-circle-check"></i> סיום אימון ושמירה בהיסטוריה
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Tab -->
+            <section id="history-tab" class="tab-content">
+                <div class="glass-card">
+                    <h1 class="section-title"><i class="fa-solid fa-clock-rotate-left"></i> היסטוריית אימונים</h1>
+                    
+                    <div id="history-list" class="history-list">
+                        <!-- Saved workouts will appear here -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-calendar-xmark"></i>
+                            <p>עדיין אין אימונים שמורים בהיסטוריה.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer>
+            <p>&copy; נבנה על-ידי שחר פתרונות דיגיטליים</p>
+        </footer>
+    </div>
+
+    <!-- Custom Modal -->
+    <div id="custom-modal" class="modal-overlay" style="display: none;">
+        <div class="glass-card modal-card">
+            <div class="modal-content" id="modal-message">הודעה</div>
+            <div class="modal-actions" id="modal-buttons">
+                <!-- Buttons will be inserted here via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
