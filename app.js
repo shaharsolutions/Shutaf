@@ -17,83 +17,6 @@ let activeWorkoutState = {}; // Tracks completed sets in activity tab
 let restTime = 60;
 let editingExerciseId = null; // Tracks which exercise is being edited
 
-// Utility for making elements draggable (Floating Widget)
-function makeDraggable(el, handle) {
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    
-    handle.onmousedown = dragStart;
-    handle.ontouchstart = dragStart;
-
-    function dragStart(e) {
-        // Don't drag if clicking on buttons
-        if (e.target.closest('button')) return;
-        
-        e = e || window.event;
-        // preventDefault for touch can be tricky, but for fixed widgets it usually helps
-        if (e.type === 'mousedown') e.preventDefault();
-        
-        el.classList.add('dragging');
-        
-        if (e.type === 'touchstart') {
-            pos3 = e.touches[0].clientX;
-            pos4 = e.touches[0].clientY;
-        } else {
-            pos3 = e.clientX;
-            pos4 = e.clientY;
-        }
-        
-        document.onmouseup = dragEnd;
-        document.ontouchend = dragEnd;
-        document.onmousemove = dragMove;
-        document.ontouchmove = dragMove;
-    }
-
-    function dragMove(e) {
-        e = e || window.event;
-        
-        let clientX, clientY;
-        if (e.type === 'touchmove') {
-            clientX = e.touches[0].clientX;
-            clientY = e.touches[0].clientY;
-        } else {
-            clientX = e.clientX;
-            clientY = e.clientY;
-        }
-
-        pos1 = pos3 - clientX;
-        pos2 = pos4 - clientY;
-        pos3 = clientX;
-        pos4 = clientY;
-        
-        // Remove transform after first move to avoid jumping
-        if (el.style.transform !== 'none') {
-            const rect = el.getBoundingClientRect();
-            el.style.left = rect.left + 'px';
-            el.style.top = rect.top + 'px';
-            el.style.transform = 'none';
-            el.style.margin = '0';
-        }
-
-        const newTop = el.offsetTop - pos2;
-        const newLeft = el.offsetLeft - pos1;
-        
-        // Keep within viewport (optional but recommended)
-        const padding = 10;
-        const maxX = window.innerWidth - el.offsetWidth - padding;
-        const maxY = window.innerHeight - el.offsetHeight - padding;
-        
-        el.style.top = Math.max(padding, Math.min(newTop, maxY)) + "px";
-        el.style.left = Math.max(padding, Math.min(newLeft, maxX)) + "px";
-    }
-
-    function dragEnd() {
-        el.classList.remove('dragging');
-        document.onmouseup = null;
-        document.onmousemove = null;
-        document.ontouchend = null;
-        document.ontouchmove = null;
-    }
-}
 
 // PWA Installation
 let deferredPrompt;
@@ -244,14 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize Drag and Drop for current plan list
     initDragAndDrop();
-
-    // Make timer draggable
-    if (elements.timerWidget) {
-        const timerHeader = elements.timerWidget.querySelector('.timer-header');
-        if (timerHeader) {
-            makeDraggable(elements.timerWidget, timerHeader);
-        }
-    }
 
     // Initial check for installation status
     showInstallPromotion();
@@ -1067,16 +982,11 @@ function startTimer(seconds = 60) {
     timeLeft = seconds;
     isTimerRunning = true;
     
-    const widget = document.getElementById('timer-widget');
-    widget.style.display = 'flex';
-    
-    // Hide mini timer when large one is shown
-    if (elements.miniTimer) elements.miniTimer.style.display = 'none';
-    
-    const toggleBtn = document.getElementById('timer-toggle-btn');
-    if (toggleBtn) toggleBtn.innerText = 'עצור';
+    // Show mini timer
+    if (elements.miniTimer) elements.miniTimer.style.display = 'flex';
     
     updateTimerDisplay();
+    updateTimerToggleIcon();
     
     timerInterval = setInterval(() => {
         timeLeft--;
@@ -1085,7 +995,7 @@ function startTimer(seconds = 60) {
         if (timeLeft <= 0) {
             clearInterval(timerInterval);
             isTimerRunning = false;
-            if (toggleBtn) toggleBtn.innerText = 'התחל';
+            updateTimerToggleIcon();
             flashTimerDisplay();
         }
     }, 1000);
@@ -1096,20 +1006,25 @@ function updateTimerDisplay() {
     const seconds = timeLeft % 60;
     const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     
-    if (elements.timerCountdown) elements.timerCountdown.innerText = timeStr;
     if (elements.miniTimerDisplay) elements.miniTimerDisplay.innerText = timeStr;
 }
 
+function updateTimerToggleIcon() {
+    const toggleBtn = document.getElementById('mini-timer-toggle');
+    if (toggleBtn) {
+        toggleBtn.innerHTML = isTimerRunning ? 
+            '<i class="fa-solid fa-pause"></i>' : 
+            '<i class="fa-solid fa-play"></i>';
+    }
+}
+
 function toggleTimer() {
-    const toggleBtn = document.getElementById('timer-toggle-btn');
     if (isTimerRunning) {
         clearInterval(timerInterval);
         isTimerRunning = false;
-        if (toggleBtn) toggleBtn.innerText = 'המשך';
     } else {
         if (timeLeft <= 0) timeLeft = 60;
         isTimerRunning = true;
-        if (toggleBtn) toggleBtn.innerText = 'עצור';
         
         timerInterval = setInterval(() => {
             timeLeft--;
@@ -1117,11 +1032,12 @@ function toggleTimer() {
             if (timeLeft <= 0) {
                 clearInterval(timerInterval);
                 isTimerRunning = false;
-                if (toggleBtn) toggleBtn.innerText = 'התחל';
+                updateTimerToggleIcon();
                 flashTimerDisplay();
             }
         }, 1000);
     }
+    updateTimerToggleIcon();
 }
 
 function adjustTimer(amount) {
@@ -1131,32 +1047,17 @@ function adjustTimer(amount) {
 }
 
 function closeTimer() {
-    // Instead of stopping, we just hide the floating widget and show the mini one
-    elements.timerWidget.style.display = 'none';
-    
-    // Only show mini timer if the timer is still relevant (running or has time left)
-    if (timeLeft > 0 || isTimerRunning) {
-        if (elements.miniTimer) elements.miniTimer.style.display = 'flex';
-    } else {
-        clearInterval(timerInterval);
-        isTimerRunning = false;
-    }
-}
-
-function expandTimer() {
+    clearInterval(timerInterval);
+    isTimerRunning = false;
     if (elements.miniTimer) elements.miniTimer.style.display = 'none';
-    elements.timerWidget.style.display = 'flex';
 }
 
 function flashTimerDisplay() {
-    const display = document.getElementById('timer-countdown');
     const miniDisplay = document.getElementById('mini-timer-display');
     
-    if (display) display.style.animation = 'pulse 0.5s infinite alternate';
     if (miniDisplay) miniDisplay.style.animation = 'pulse 0.5s infinite alternate';
     
     setTimeout(() => {
-        if (display) display.style.animation = '';
         if (miniDisplay) miniDisplay.style.animation = '';
     }, 5000);
 }
@@ -1575,7 +1476,6 @@ window.toggleSetComplete = toggleSetComplete;
 window.toggleTimer = toggleTimer;
 window.adjustTimer = adjustTimer;
 window.closeTimer = closeTimer;
-window.expandTimer = expandTimer;
 window.finishWorkout = finishWorkout;
 window.loadWorkoutFromHistory = loadWorkoutFromHistory;
 window.deleteHistoryItem = deleteHistoryItem;

@@ -168,29 +168,22 @@
 
             <!-- Activity Tab -->
             <section id="activity-tab" class="tab-content">
-                <!-- Mini Timer (Shown when floating timer is hidden) -->
-                <div id="mini-timer" class="mini-timer-bar" style="display: none;" onclick="expandTimer()">
+                <!-- Timer Bar (Primary display) -->
+                <div id="mini-timer" class="mini-timer-bar" style="display: none;">
                     <div class="mini-timer-info">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
-                        <span>מנוחה פעילה:</span>
+                        <i class="fa-solid fa-clock"></i>
+                        <span>זמן מנוחה:</span>
                         <span id="mini-timer-display">01:00</span>
                     </div>
-                    <button class="expand-btn">
-                        <i class="fa-solid fa-up-right-and-down-left-from-center"></i> הגדל
-                    </button>
-                </div>
-
-                <!-- Timer Widget -->
-                <div class="glass-card timer-widget" id="timer-widget" style="display: none;">
-                    <div class="timer-header">
-                        <span><i class="fa-solid fa-clock"></i> זמן מנוחה</span>
-                        <button class="close-timer" onclick="closeTimer()">&times;</button>
-                    </div>
-                    <div class="timer-display" id="timer-countdown">01:00</div>
-                    <div class="timer-controls">
-                        <button class="timer-btn" onclick="adjustTimer(-10)">-10s</button>
-                        <button class="timer-btn timer-btn-main" id="timer-toggle-btn" onclick="toggleTimer()">עצור</button>
-                        <button class="timer-btn" onclick="adjustTimer(10)">+10s</button>
+                    <div class="mini-timer-actions">
+                        <button class="mini-btn" onclick="adjustTimer(-10)" title="-10s">-</button>
+                        <button class="mini-btn" onclick="toggleTimer()" id="mini-timer-toggle" title="עצור/המשך">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>
+                        <button class="mini-btn" onclick="adjustTimer(10)" title="+10s">+</button>
+                        <button class="mini-btn close-mini" onclick="closeTimer()" title="סגור">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
                 </div>
 
