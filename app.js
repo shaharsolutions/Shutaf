@@ -98,34 +98,88 @@ function makeDraggable(el, handle) {
 // PWA Installation
 let deferredPrompt;
 
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('Service Worker registered', reg))
-            .catch(err => console.error('Service Worker registration failed', err));
-    });
-}
+// Check if already installed
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    
+    showInstallPromotion();
+});
+
+window.addEventListener('appinstalled', (evt) => {
+    console.log('App was installed');
+    hideInstallPromotion();
+});
+
+function showInstallPromotion() {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) {
+        hideInstallPromotion();
+        return;
+    }
+
     const installBtn = document.getElementById('install-btn');
-    if (installBtn) {
-        installBtn.style.display = 'inline-flex';
-        
-        installBtn.addEventListener('click', () => {
-            installBtn.style.display = 'none';
+    const installBtnSetup = document.getElementById('install-btn-setup');
+    const installCard = document.getElementById('install-card');
+
+    if (installBtn) installBtn.style.display = 'inline-flex';
+    if (installCard) installCard.style.display = 'block';
+
+    const handleInstallClick = () => {
+        if (deferredPrompt) {
             deferredPrompt.prompt();
             deferredPrompt.userChoice.then((choiceResult) => {
                 if (choiceResult.outcome === 'accepted') {
-                    console.log('User accepted the install prompt');
+                    hideInstallPromotion();
                 }
                 deferredPrompt = null;
             });
-        });
+        } else {
+            // Manual instructions fallback
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            if (isIOS) {
+                customAlert('התקנה באייפון: לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ למעלה) ובחר ב-"הוסף למסך הבית".');
+            } else {
+                customAlert('להתקנת האפליקציה: לחץ על שלוש הנקודות בתפריט הדפדפן ובחר ב-"התקן אפליקציה" או "הוסף למסך הבית".');
+            }
+        }
+    };
+
+    if (installBtn) {
+        const newBtn = installBtn.cloneNode(true);
+        installBtn.parentNode.replaceChild(newBtn, installBtn);
+        newBtn.addEventListener('click', handleInstallClick);
+        elements.installBtn = newBtn;
     }
-});
+
+    if (installBtnSetup) {
+        const newBtnSetup = installBtnSetup.cloneNode(true);
+        installBtnSetup.parentNode.replaceChild(newBtnSetup, installBtnSetup);
+        newBtnSetup.addEventListener('click', handleInstallClick);
+    }
+}
+
+function hideInstallPromotion() {
+    const installBtn = document.getElementById('install-btn');
+    const installCard = document.getElementById('install-card');
+    if (installBtn) installBtn.style.display = 'none';
+    if (installCard) installCard.style.display = 'none';
+}
+
+// Fallback for iOS
+function checkIOSInstallation(forceShowAlert = false) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    
+    if (isIOS && !isStandalone) {
+        if (forceShowAlert) {
+            customAlert('התקנה באייפון: לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ למעלה) ובחר ב-"הוסף למסך הבית".');
+        } else {
+            showInstallPromotion();
+        }
+    }
+}
 
 // DOM Elements Cache
 const elements = {
@@ -197,6 +251,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (timerHeader) {
             makeDraggable(elements.timerWidget, timerHeader);
         }
+    }
+
+    // Initial check for installation status
+    showInstallPromotion();
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(reg => console.log('Service Worker registered'))
+            .catch(err => console.error('Service Worker registration failed', err));
     }
 });
 
