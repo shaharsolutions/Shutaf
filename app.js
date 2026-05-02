@@ -1505,6 +1505,8 @@ function handleDragEnd(e) {
 // Touch Support for Mobile
 let touchStartY = 0;
 let touchCurrentY = 0;
+let dragStarted = false;
+let dragTimer = null;
 
 function handleTouchStart(e) {
     const handle = e.target.closest('.drag-handle');
@@ -1514,17 +1516,18 @@ function handleTouchStart(e) {
     if (e.target.closest('.item-actions')) return;
 
     dragSourceEl = this;
+    touchStartY = e.touches[0].clientY;
+    dragStarted = false;
     
-    // Delay adding dragging class slightly to avoid pointer-events: none 
-    // interrupting the touch start sequence in some browsers
-    setTimeout(() => {
+    // Set a small timer to distinguish between a tap/scroll and a drag
+    // On iPhone, this is crucial to allow natural scrolling if the user moves quickly
+    dragTimer = setTimeout(() => {
         if (dragSourceEl) {
+            dragStarted = true;
             dragSourceEl.classList.add('dragging');
             if (window.navigator.vibrate) window.navigator.vibrate(20);
         }
-    }, 50);
-    
-    touchStartY = e.touches[0].clientY;
+    }, 150);
 }
 
 let autoScrollInterval = null;
@@ -1534,13 +1537,19 @@ function handleTouchMove(e) {
     
     const touch = e.touches[0];
     touchCurrentY = touch.clientY;
-    
-    // Check if the movement is enough to be considered a drag
-    // This helps avoid blocking accidental tiny movements that might be intended for scrolling
     const deltaY = Math.abs(touchCurrentY - touchStartY);
-    if (deltaY < 5) return; 
+    
+    if (!dragStarted) {
+        // If the user moves more than 10px before the drag timer fires,
+        // we assume they wanted to scroll the page, not drag the item.
+        if (deltaY > 10) {
+            clearTimeout(dragTimer);
+            dragSourceEl = null;
+        }
+        return;
+    }
 
-    // Prevent scrolling while dragging
+    // If we reach here, dragStarted is true, so we prevent scrolling
     if (e.cancelable) e.preventDefault();
     
     // Auto-scroll logic
@@ -1587,14 +1596,19 @@ function handleTouchMove(e) {
 }
 
 function handleTouchEnd(e) {
+    clearTimeout(dragTimer);
     if (!dragSourceEl) return;
     
     clearInterval(autoScrollInterval);
     autoScrollInterval = null;
     
-    dragSourceEl.classList.remove('dragging');
-    finishReorder();
+    if (dragStarted) {
+        dragSourceEl.classList.remove('dragging');
+        finishReorder();
+    }
+    
     dragSourceEl = null;
+    dragStarted = false;
 }
 
 function finishReorder() {

@@ -32,22 +32,21 @@
 }
 
 html {
-    overflow-x: hidden;
-    height: -webkit-fill-available;
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
 }
 
 body {
     background-color: var(--primary-bg);
     color: var(--text-primary);
-    min-height: 100vh;
-    min-height: -webkit-fill-available;
+    min-height: 100%;
     width: 100%;
     overflow-x: hidden;
     overscroll-behavior-y: contain;
     position: relative;
     touch-action: pan-y pinch-zoom;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Background Glows */
@@ -1005,7 +1004,7 @@ footer {
     align-items: center;
     justify-content: center;
     transition: var(--transition);
-    touch-action: none;
+    touch-action: manipulation;
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
