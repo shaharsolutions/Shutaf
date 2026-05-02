@@ -46,9 +46,14 @@
                     <i class="fa-solid fa-dumbbell"></i>
                     <span>שו<span>תף</span></span>
                 </div>
-                <button id="install-btn" class="btn btn-primary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px;">
-                    <i class="fa-solid fa-download"></i> התקן אפליקציה
-                </button>
+                <div style="display: flex; gap: 10px; align-items: center; grid-column: 3; justify-self: end;">
+                    <button id="logout-btn" class="btn btn-secondary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--glass-border);">
+                        <i class="fa-solid fa-right-from-bracket"></i> התנתק
+                    </button>
+                    <button id="install-btn" class="btn btn-primary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px;">
+                        <i class="fa-solid fa-download"></i> התקן אפליקציה
+                    </button>
+                </div>
             </nav>
             <div class="nav-links">
                 <button id="nav-setup" class="nav-btn active" onclick="switchTab('setup')">
@@ -69,8 +74,44 @@
         <!-- Main Content -->
         <main class="main-content">
             
+            <!-- Auth Tab -->
+            <section id="auth-tab" class="tab-content active">
+                <div class="glass-card auth-card">
+                    <h2 class="section-title" id="auth-title">
+                        <i class="fa-solid fa-user-lock"></i> התחברות
+                    </h2>
+                    <form id="auth-form" onsubmit="event.preventDefault(); handleAuth();">
+                        <div class="form-group">
+                            <label for="auth-email">אימייל</label>
+                            <input type="email" id="auth-email" placeholder="you@example.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="auth-password">סיסמה</label>
+                            <input type="password" id="auth-password" placeholder="••••••••" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="auth-submit-btn">
+                            <i class="fa-solid fa-sign-in-alt"></i> התחבר
+                        </button>
+                    </form>
+                    <div style="margin: 15px 0; display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 14px;">
+                        <div style="flex: 1; height: 1px; background: var(--glass-border);"></div>
+                        <span>או</span>
+                        <div style="flex: 1; height: 1px; background: var(--glass-border);"></div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="handleGoogleLogin()" style="background: white; color: #0f172a; border: none; margin-bottom: 15px;">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18" style="margin-left: 10px;">
+                        התחבר עם Google
+                    </button>
+                    <div style="margin-top: 5px; text-align: center;">
+                        <p id="auth-toggle-text" style="color: var(--text-secondary); font-size: 14px; cursor: pointer;">
+                            אין לך חשבון? <span style="color: var(--accent-color); font-weight: 600;">הרשם עכשיו</span>
+                        </p>
+                    </div>
+                </div>
+            </section>
+
             <!-- Workout Setup Tab -->
-            <section id="setup-tab" class="tab-content active">
+            <section id="setup-tab" class="tab-content">
                 <!-- Workout Settings Card -->
                 <div class="glass-card settings-card" style="margin-bottom: 20px;">
                     <h2 class="section-title" style="font-size: 18px; margin-bottom: 15px;">
@@ -78,7 +119,7 @@
                     </h2>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label for="global-rest-time">זמן מנוחה בין סטים (בשניות)</label>
-                        <input type="number" id="global-rest-time" min="5" max="300" value="60" placeholder="60" onchange="saveRestTime()">
+                        <input type="number" id="global-rest-time" min="5" max="300" value="90" placeholder="90" onchange="saveRestTime()">
                     </div>
                 </div>
 
@@ -152,18 +193,7 @@
                     </div>
                 </div>
 
-                <!-- Installation Prompt Card -->
-                <div class="glass-card" id="install-card" style="display: none; margin-top: 20px; border: 1px solid var(--accent-color);">
-                    <h2 class="section-title" style="font-size: 18px; margin-bottom: 10px;">
-                        <i class="fa-solid fa-mobile-screen-button"></i> התקן את שותף על המסך
-                    </h2>
-                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 15px;">
-                        התקן את האפליקציה למסך הבית לגישה מהירה וחוויה חלקה יותר.
-                    </p>
-                    <button id="install-btn-setup" class="btn btn-primary">
-                        <i class="fa-solid fa-download"></i> התקן עכשיו
-                    </button>
-                </div>
+
             </section>
 
             <!-- Activity Tab -->
@@ -173,7 +203,7 @@
                     <div class="mini-timer-info">
                         <i class="fa-solid fa-clock"></i>
                         <span>זמן מנוחה:</span>
-                        <span id="mini-timer-display">01:00</span>
+                        <span id="mini-timer-display">01:30</span>
                     </div>
                     <div class="mini-timer-actions">
                         <button class="mini-btn" onclick="adjustTimer(-10)" title="-10s">-</button>
@@ -197,9 +227,12 @@
                             <p>אין אימון פעיל. עבור ללשונית "הגדרת אימון" כדי ליצור תכנית.</p>
                         </div>
                     </div>
-                    <div class="workout-actions" id="workout-actions" style="display: none; margin-top: 20px;">
-                        <button class="btn btn-success" onclick="finishWorkout()">
-                            <i class="fa-solid fa-circle-check"></i> סיום אימון ושמירה בהיסטוריה
+                    <div class="workout-actions" id="workout-actions" style="display: none; margin-top: 20px; gap: 12px;">
+                        <button class="btn btn-success" onclick="finishWorkout()" style="flex: 2;">
+                            <i class="fa-solid fa-circle-check"></i> סיום אימון ושמירה
+                        </button>
+                        <button class="btn btn-danger" onclick="stopWorkout()" style="flex: 1;">
+                            <i class="fa-solid fa-stop"></i> עצור
                         </button>
                     </div>
                 </div>

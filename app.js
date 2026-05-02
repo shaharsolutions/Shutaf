@@ -8,14 +8,25 @@ import {
     arrayRemove,
     onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { 
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    signInWithPopup
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { auth, GoogleAuthProvider } from './firebase-config.js';
 
 // State Management
 let workoutPlans = [];
 let selectedWorkoutId = null;
 let activeWorkoutId = null; // The workout currently being performed
 let activeWorkoutState = {}; // Tracks completed sets in activity tab
-let restTime = 60;
+let restTime = 90;
 let editingExerciseId = null; // Tracks which exercise is being edited
+let currentUser = null;
+let authMode = 'login'; // 'login' or 'signup'
+let userUnsubscribe = null; // To clean up Firestore listeners
 
 
 // PWA Installation
@@ -43,11 +54,8 @@ function showInstallPromotion() {
     }
 
     const installBtn = document.getElementById('install-btn');
-    const installBtnSetup = document.getElementById('install-btn-setup');
-    const installCard = document.getElementById('install-card');
 
     if (installBtn) installBtn.style.display = 'inline-flex';
-    if (installCard) installCard.style.display = 'block';
 
     const handleInstallClick = () => {
         if (deferredPrompt) {
@@ -75,11 +83,6 @@ function showInstallPromotion() {
         elements.installBtn = newBtn;
     }
 
-    if (installBtnSetup) {
-        const newBtnSetup = installBtnSetup.cloneNode(true);
-        installBtnSetup.parentNode.replaceChild(newBtnSetup, installBtnSetup);
-        newBtnSetup.addEventListener('click', handleInstallClick);
-    }
 }
 
 function showIOSInstallGuide() {
@@ -123,9 +126,7 @@ function showIOSInstallGuide() {
 
 function hideInstallPromotion() {
     const installBtn = document.getElementById('install-btn');
-    const installCard = document.getElementById('install-card');
     if (installBtn) installBtn.style.display = 'none';
-    if (installCard) installCard.style.display = 'none';
 }
 
 // Fallback for iOS
@@ -198,13 +199,47 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.miniTimer = document.getElementById('mini-timer');
     elements.miniTimerDisplay = document.getElementById('mini-timer-display');
 
-    loadPlanFromStorage();
-    renderWorkoutsList();
-    renderCurrentPlan();
-    renderActiveWorkout();
-    
-    // Initialize Drag and Drop for current plan list
-    initDragAndDrop();
+    // Auth Event Listeners
+    const authToggleText = document.getElementById('auth-toggle-text');
+    if (authToggleText) {
+        authToggleText.onclick = toggleAuthMode;
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.onclick = handleLogout;
+    }
+
+    // Monitor Auth State
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('auth-tab').classList.remove('active');
+            document.getElementById('setup-tab').classList.add('active');
+            document.getElementById('logout-btn').style.display = 'inline-flex';
+            
+            // Sync UI state
+            switchTab('setup');
+            
+            // Load user data from Firebase
+            loadPlanFromStorage(user.uid);
+        } else {
+            if (userUnsubscribe) {
+                userUnsubscribe();
+                userUnsubscribe = null;
+            }
+            currentUser = null;
+            document.getElementById('auth-tab').classList.add('active');
+            document.getElementById('setup-tab').classList.remove('active');
+            document.getElementById('activity-tab').classList.remove('active');
+            document.getElementById('history-tab').classList.remove('active');
+            document.getElementById('logout-btn').style.display = 'none';
+            
+            // Clear local data
+            workoutPlans = [];
+            renderWorkoutsList();
+        }
+    });
 
     // Initial check for installation status
     showInstallPromotion();
@@ -216,6 +251,119 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error('Service Worker registration failed', err));
     }
 });
+
+// Auth Functions
+function toggleAuthMode() {
+    const title = document.getElementById('auth-title');
+    const submitBtn = document.getElementById('auth-submit-btn');
+    const toggleText = document.getElementById('auth-toggle-text');
+    
+    if (authMode === 'login') {
+        authMode = 'signup';
+        title.innerHTML = '<i class="fa-solid fa-user-plus"></i> הרשמה';
+        submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> הרשם';
+        toggleText.innerHTML = 'כבר יש לך חשבון? <span style="color: var(--accent-color); font-weight: 600;">התחבר כאן</span>';
+    } else {
+        authMode = 'login';
+        title.innerHTML = '<i class="fa-solid fa-user-lock"></i> התחברות';
+        submitBtn.innerHTML = '<i class="fa-solid fa-sign-in-alt"></i> התחבר';
+        toggleText.innerHTML = 'אין לך חשבון? <span style="color: var(--accent-color); font-weight: 600;">הרשם עכשיו</span>';
+    }
+}
+
+async function handleAuth() {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    const submitBtn = document.getElementById('auth-submit-btn');
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> מעבד...';
+    
+    try {
+        if (authMode === 'login') {
+            await signInWithEmailAndPassword(auth, email, password);
+        } else {
+            await createUserWithEmailAndPassword(auth, email, password);
+        }
+    } catch (error) {
+        console.error("Auth error:", error);
+        let message = 'אירעה שגיאה בתהליך האימות.';
+        if (error.code === 'auth/wrong-password') message = 'סיסמה שגויה.';
+        if (error.code === 'auth/user-not-found') message = 'משתמש לא נמצא.';
+        if (error.code === 'auth/email-already-in-use') message = 'כתובת האימייל כבר בשימוש.';
+        if (error.code === 'auth/weak-password') message = 'הסיסמה חלשה מדי (לפחות 6 תווים).';
+        if (error.code === 'auth/invalid-email') message = 'כתובת אימייל לא תקינה.';
+        customAlert(message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = authMode === 'login' ? 
+            '<i class="fa-solid fa-sign-in-alt"></i> התחבר' : 
+            '<i class="fa-solid fa-user-plus"></i> הרשם';
+    }
+}
+
+async function handleGoogleLogin() {
+    const provider = new GoogleAuthProvider();
+    try {
+        await signInWithPopup(auth, provider);
+    } catch (error) {
+        console.error("Google Auth error:", error);
+        if (error.code !== 'auth/popup-closed-by-user') {
+            customAlert('אירעה שגיאה בהתחברות עם Google.');
+        }
+    }
+}
+
+async function handleLogout() {
+    customConfirm('האם אתה בטוח שברצונך להתנתק?', async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Logout error:", error);
+        }
+    });
+}
+
+// Expose functions to window for HTML event handlers
+window.handleAuth = handleAuth;
+window.handleGoogleLogin = handleGoogleLogin;
+window.toggleAuthMode = toggleAuthMode;
+window.switchTab = switchTab;
+window.saveRestTime = saveRestTime;
+window.createNewWorkout = createNewWorkout;
+window.updateWorkoutName = updateWorkoutName;
+window.addExercise = addExercise;
+window.saveWorkoutPlan = saveWorkoutPlan;
+window.toggleTimer = toggleTimer;
+window.adjustTimer = adjustTimer;
+window.closeTimer = closeTimer;
+window.finishWorkout = finishWorkout;
+window.stopWorkout = stopWorkout;
+
+async function loadUserData() {
+    if (!currentUser) return;
+    
+    try {
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            if (data.workoutPlans) {
+                workoutPlans = data.workoutPlans;
+                localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
+                renderWorkoutsList();
+                renderCurrentPlan();
+            }
+            if (data.restTime) {
+                restTime = data.restTime;
+                document.getElementById('global-rest-time').value = restTime;
+            }
+        }
+    } catch (error) {
+        console.error("Error loading user data:", error);
+    }
+}
 
 // Tab Switching (Optimized)
 function switchTab(tabId) {
@@ -571,7 +719,8 @@ async function saveAllPlans() {
     
     // Sync to Firebase
     try {
-        const userRef = doc(db, "users", "default_user");
+        if (!currentUser) return;
+        const userRef = doc(db, "users", currentUser.uid);
         await setDoc(userRef, { 
             workoutPlans: workoutPlans,
             lastUpdated: new Date().toISOString()
@@ -933,7 +1082,7 @@ function saveWorkoutPlan() {
 }
 
 // Load Plan from Local Storage and Firebase
-async function loadPlanFromStorage() {
+async function loadPlanFromStorage(uid) {
     // 1. Load from Local Storage (Immediate UI response)
     const savedPlans = localStorage.getItem('fitbud_plans');
     if (savedPlans) {
@@ -962,11 +1111,15 @@ async function loadPlanFromStorage() {
     renderActiveWorkout();
 
     // 2. Sync from Firebase (Real-time updates)
+    if (!uid) return;
     try {
-        const userRef = doc(db, "users", "default_user");
+        const userRef = doc(db, "users", uid);
+        
+        // Cleanup existing listener if any
+        if (userUnsubscribe) userUnsubscribe();
         
         // Use onSnapshot for real-time synchronization across devices
-        onSnapshot(userRef, (docSnap) => {
+        userUnsubscribe = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 console.log("Data synced from Firebase");
@@ -1019,12 +1172,13 @@ async function loadPlanFromStorage() {
 async function saveRestTime() {
     const restInput = document.getElementById('global-rest-time');
     if (restInput) {
-        restTime = parseInt(restInput.value) || 60;
+        restTime = parseInt(restInput.value) || 90;
         localStorage.setItem('fitbud_rest_time', restTime);
         
         // Sync to Firebase
         try {
-            const userRef = doc(db, "users", "default_user");
+            if (!currentUser) return;
+            const userRef = doc(db, "users", currentUser.uid);
             await setDoc(userRef, { restTime: restTime }, { merge: true });
         } catch (e) {
             console.error("Error saving rest time to Firebase:", e);
@@ -1051,7 +1205,7 @@ function renderActiveWorkout() {
         return;
     }
     
-    if (actionsDiv) actionsDiv.style.display = 'block';
+    if (actionsDiv) actionsDiv.style.display = 'flex';
     
     const fragment = document.createDocumentFragment();
     
@@ -1145,10 +1299,10 @@ function toggleSetComplete(exerciseId, setIndex, element, originalReps) {
 
 // Timer Logic
 let timerInterval = null;
-let timeLeft = 60;
+let timeLeft = 90;
 let isTimerRunning = false;
 
-function startTimer(seconds = 60) {
+function startTimer(seconds = 90) {
     clearInterval(timerInterval);
     timeLeft = seconds;
     isTimerRunning = true;
@@ -1194,7 +1348,7 @@ function toggleTimer() {
         clearInterval(timerInterval);
         isTimerRunning = false;
     } else {
-        if (timeLeft <= 0) timeLeft = 60;
+        if (timeLeft <= 0) timeLeft = 90;
         isTimerRunning = true;
         
         timerInterval = setInterval(() => {
@@ -1288,10 +1442,22 @@ async function finishWorkout() {
     });
 }
 
+function stopWorkout() {
+    customConfirm('האם אתה בטוח שברצונך לעצור את האימון? ההתקדמות הנוכחית לא תישמר.', () => {
+        activeWorkoutId = null;
+        activeWorkoutState = {};
+        localStorage.removeItem('fitbud_active_workout_id');
+        localStorage.removeItem('fitbud_activity_state');
+        if (typeof closeTimer === 'function') closeTimer();
+        switchTab('setup');
+    });
+}
+
 // Helper to sync history to Firebase
 async function syncHistoryToFirebase(history) {
     try {
-        const userRef = doc(db, "users", "default_user");
+        if (!currentUser) return;
+        const userRef = doc(db, "users", currentUser.uid);
         await setDoc(userRef, { history: history }, { merge: true });
         console.log("History synced to Firebase");
     } catch (e) {

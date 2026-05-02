@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shutaf-cache-v5';
+const CACHE_NAME = 'shutaf-cache-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
