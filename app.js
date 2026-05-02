@@ -1,26 +1,21 @@
-import { db } from './firebase-config.js';
 import { 
-    doc, 
-    setDoc, 
-    getDoc, 
-    updateDoc, 
-    arrayUnion, 
-    arrayRemove,
-    onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { 
+    auth, 
+    db,
     onAuthStateChanged,
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
-    signInWithPopup
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { 
-    auth, 
     GoogleAuthProvider, 
     signInWithRedirect, 
     getRedirectResult,
-    signInWithPopup 
+    signInWithPopup,
+    doc,
+    setDoc,
+    getDoc,
+    updateDoc,
+    arrayUnion,
+    arrayRemove,
+    onSnapshot
 } from './firebase-config.js';
 
 // State Management
@@ -216,6 +211,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutBtn.onclick = handleLogout;
     }
 
+    const googleBtn = document.getElementById('google-login-btn');
+    if (googleBtn) {
+        googleBtn.onclick = handleGoogleLogin;
+    }
+
     // Monitor Auth State
     onAuthStateChanged(auth, (user) => {
         if (user) {
@@ -317,24 +317,40 @@ async function handleAuth() {
 }
 
 async function handleGoogleLogin() {
-    const provider = new GoogleAuthProvider();
+    const btn = document.getElementById('google-login-btn');
+    const originalContent = btn ? btn.innerHTML : '';
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> מעבד...';
+    }
     
     try {
-        // Attempt popup first - more reliable on iOS/Safari and PWAs
+        const provider = new GoogleAuthProvider();
+        // Force the provider to use the popup resolver
+        provider.setCustomParameters({
+            prompt: 'select_account'
+        });
+        
         await signInWithPopup(auth, provider);
     } catch (error) {
         console.error("Google Auth error:", error);
         
-        // Fallback to redirect only if popup is blocked
+        // Fallback to redirect only if popup is explicitly blocked
         if (error.code === 'auth/popup-blocked') {
             try {
                 await signInWithRedirect(auth, provider);
             } catch (redirError) {
                 console.error("Redirect error:", redirError);
-                customAlert('הדפדפן חסם את חלון ההתחברות. נסה לאפשר חלונות קופצים או להשתמש בדפדפן אחר.');
+                customAlert('הדפדפן חסם את חלון ההתחברות. נסה לאפשר חלונות קופצים בהגדרות הדפדפן או להשתמש בדפדפן אחר.');
             }
         } else if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-            customAlert('אירעה שגיאה בהתחברות עם Google. וודא שחלונות קופצים מאושרים או נסה שוב.');
+            customAlert('אירעה שגיאה בהתחברות עם Google: ' + (error.message || 'שגיאה לא ידועה'));
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
         }
     }
 }
