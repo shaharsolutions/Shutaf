@@ -783,6 +783,7 @@ function renderCurrentPlan() {
         item.addEventListener('touchstart', handleTouchStart, { passive: false });
         item.addEventListener('touchmove', handleTouchMove, { passive: false });
         item.addEventListener('touchend', handleTouchEnd);
+        item.addEventListener('touchcancel', handleTouchEnd);
 
         fragment.appendChild(item);
     });
@@ -1534,8 +1535,13 @@ function handleTouchMove(e) {
     const touch = e.touches[0];
     touchCurrentY = touch.clientY;
     
+    // Check if the movement is enough to be considered a drag
+    // This helps avoid blocking accidental tiny movements that might be intended for scrolling
+    const deltaY = Math.abs(touchCurrentY - touchStartY);
+    if (deltaY < 5) return; 
+
     // Prevent scrolling while dragging
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     
     // Auto-scroll logic
     const scrollThreshold = 100;
