@@ -1458,14 +1458,18 @@ function editHistoryDate(id) {
     const btnContainer = document.getElementById('modal-buttons');
     
     msgEl.innerHTML = `
-        <div style="margin-bottom: 15px; font-weight: 600;">עריכת תאריך ושעה</div>
-        <div style="margin-bottom: 10px; font-size: 14px; color: var(--text-secondary);">בחר את המועד החדש עבור האימון:</div>
-        <input type="datetime-local" id="edit-date-input" value="${formattedDate}" style="margin-bottom: 10px; background: rgba(15,23,42,0.8); border: 1px solid var(--accent-color);">
+        <div style="margin-bottom: 20px; font-weight: 700; font-size: 20px; color: var(--accent-color);">עריכת תאריך ושעה</div>
+        <div style="margin-bottom: 15px; font-size: 15px; color: var(--text-secondary);">בחר את המועד החדש עבור האימון:</div>
+        <input type="datetime-local" id="edit-date-input" class="modal-datetime-input" value="${formattedDate}">
     `;
     
     btnContainer.innerHTML = `
-        <button class="modal-btn modal-btn-cancel" id="modal-cancel-btn">ביטול</button>
-        <button class="modal-btn modal-btn-confirm" id="modal-save-date-btn">שמור שינויים</button>
+        <button class="modal-btn modal-btn-cancel" id="modal-cancel-btn">
+            <i class="fa-solid fa-xmark" style="margin-left: 8px;"></i> ביטול
+        </button>
+        <button class="modal-btn modal-btn-confirm" id="modal-save-date-btn">
+            <i class="fa-solid fa-floppy-disk" style="margin-left: 8px;"></i> שמור שינויים
+        </button>
     `;
     
     modal.style.display = 'flex';
@@ -1536,7 +1540,9 @@ function customAlert(message, callback) {
     
     msgEl.innerText = message;
     btnContainer.innerHTML = `
-        <button class="modal-btn modal-btn-confirm" id="modal-ok-btn">אישור</button>
+        <button class="modal-btn modal-btn-confirm" id="modal-ok-btn">
+            <i class="fa-solid fa-check" style="margin-left: 8px;"></i> אישור
+        </button>
     `;
     
     modal.style.display = 'flex';
@@ -1557,8 +1563,12 @@ function customConfirm(message, onConfirm, onCancel) {
     
     msgEl.innerText = message;
     btnContainer.innerHTML = `
-        <button class="modal-btn modal-btn-cancel" id="modal-cancel-btn">ביטול</button>
-        <button class="modal-btn modal-btn-confirm" id="modal-confirm-btn">אישור</button>
+        <button class="modal-btn modal-btn-cancel" id="modal-cancel-btn">
+            <i class="fa-solid fa-xmark" style="margin-left: 8px;"></i> ביטול
+        </button>
+        <button class="modal-btn modal-btn-confirm" id="modal-confirm-btn">
+            <i class="fa-solid fa-check" style="margin-left: 8px;"></i> אישור
+        </button>
     `;
     
     modal.style.display = 'flex';

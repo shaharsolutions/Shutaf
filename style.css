@@ -762,13 +762,17 @@ footer {
 }
 
 .modal-btn {
-    padding: 10px 25px;
+    padding: 12px 20px;
     border-radius: var(--radius-md);
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
     border: none;
     font-size: 16px;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .modal-btn-confirm {
@@ -783,15 +787,45 @@ footer {
 }
 
 .modal-btn-cancel {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
     color: var(--text-secondary);
 }
 
 .modal-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
     border-color: var(--text-secondary);
 }
+
+/* Custom Datetime Picker for Modal */
+.modal-datetime-input {
+    width: 100%;
+    background: rgba(15, 23, 42, 0.8) !important;
+    border: 1px solid var(--accent-color) !important;
+    color: var(--text-primary) !important;
+    padding: 15px !important;
+    border-radius: var(--radius-md) !important;
+    font-size: 18px !important;
+    margin-bottom: 20px !important;
+    text-align: center;
+    appearance: none;
+    -webkit-appearance: none;
+    font-family: 'Outfit', sans-serif;
+    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.1);
+}
+
+.modal-datetime-input:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3) !important;
+}
+
+/* Fix for iOS datetime-local icon/styling */
+::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
 
 /* iOS Install Guide */
 .ios-install-guide {
@@ -946,8 +980,12 @@ footer {
     }
     
     .glass-card {
-        padding: 15px;
+        padding: 20px;
         border-radius: var(--radius-md);
+    }
+    
+    .modal-card {
+        padding: 30px 20px;
     }
 
     .section-title {
