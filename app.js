@@ -1384,9 +1384,6 @@ function renderHistory() {
             </div>
             <div>${exercisesHtml}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-                <button class="btn btn-primary" onclick="loadWorkoutFromHistory('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px;">
-                    <i class="fa-solid fa-rotate-left"></i> טען לאימון חדש
-                </button>
                 <button class="btn btn-primary" onclick="editHistoryPerformance('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);">
                     <i class="fa-solid fa-pen-to-square"></i> ערוך ביצוע
                 </button>
