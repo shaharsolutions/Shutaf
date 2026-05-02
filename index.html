@@ -34,23 +34,25 @@
     </noscript>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Background decorative elements -->
+    <div class="bg-fixed-layer">
         <div class="bg-glow glow-1"></div>
         <div class="bg-glow glow-2"></div>
+    </div>
+    <div class="app-container">
 
         <!-- Navigation Header -->
         <header class="app-header">
             <nav class="navbar">
+                <div class="nav-placeholder"></div>
                 <div class="logo">
                     <i class="fa-solid fa-dumbbell"></i>
                     <span>שו<span>תף</span></span>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center; grid-column: 3; justify-self: end;">
-                    <button id="logout-btn" class="btn btn-secondary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px; background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid var(--glass-border);">
+                <div class="nav-actions">
+                    <button id="logout-btn" class="btn btn-secondary">
                         <i class="fa-solid fa-right-from-bracket"></i> התנתק
                     </button>
-                    <button id="install-btn" class="btn btn-primary" style="display: none; padding: 8px 15px; width: auto; font-size: 14px;">
+                    <button id="install-btn" class="btn btn-primary">
                         <i class="fa-solid fa-download"></i> התקן אפליקציה
                     </button>
                 </div>

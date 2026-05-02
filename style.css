@@ -43,12 +43,24 @@ body {
     color: var(--text-primary);
     min-height: 100%;
     width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
     overscroll-behavior-y: contain;
     position: relative;
     touch-action: pan-y pinch-zoom;
     -webkit-font-smoothing: antialiased;
     -webkit-overflow-scrolling: touch;
+}
+
+.bg-fixed-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
 }
 
 /* Background Glows */
@@ -105,17 +117,29 @@ body {
     gap: 15px;
 }
 
-.navbar::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+.nav-placeholder {
+    grid-column: 1;
+}
+
+.nav-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    grid-column: 3;
+    justify-self: end;
+}
+
+.nav-actions .btn {
+    display: none; /* Controlled by JS */
+    padding: 8px 15px;
+    width: auto;
+    font-size: 14px;
+}
+
+#logout-btn {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    z-index: -1;
 }
 
 .logo {
@@ -133,10 +157,6 @@ body {
 
 .logo i {
     color: var(--accent-color);
-}
-#install-btn {
-    grid-column: 3;
-    justify-self: end;
 }
 
 
@@ -995,15 +1015,22 @@ footer a:hover {
         border-radius: var(--radius-md);
         margin-bottom: 20px;
         gap: 10px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
     }
 
-    .navbar::before {
-        display: none;
+    .nav-placeholder {
+        grid-column: 1;
     }
-    
-    #install-btn {
+
+    .nav-actions {
         grid-column: 3;
         justify-self: end;
+    }
+    
+    .nav-actions .btn {
         margin: 0 !important;
         font-size: 12px !important;
         padding: 6px 12px !important;
