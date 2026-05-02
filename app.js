@@ -412,6 +412,106 @@ function deleteWorkoutPlan(id) {
     });
 }
 
+function isPerfectWorkout(historyEntry) {
+    if (!historyEntry || !historyEntry.workout || !historyEntry.state) return false;
+    
+    for (const ex of historyEntry.workout) {
+        for (let i = 0; i < ex.sets.length; i++) {
+            const stateKey = `${ex.id}-${i}`;
+            const repsPerformed = historyEntry.state[stateKey];
+            
+            // Handle both object and simple number formats for older data
+            const setData = ex.sets[i];
+            const repsRequired = typeof setData === 'object' ? setData.reps : setData;
+            
+            if (repsPerformed === undefined || repsPerformed < repsRequired) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+function showWeightIncreaseModal(plan, callback) {
+    const modal = document.getElementById('custom-modal');
+    const msgEl = document.getElementById('modal-message');
+    const btnContainer = document.getElementById('modal-buttons');
+    
+    if (!modal || !msgEl || !btnContainer) {
+        callback();
+        return;
+    }
+
+    let exercisesHtml = '';
+    plan.exercises.forEach((ex, idx) => {
+        // Get current weight from first set as preview
+        const currentWeight = ex.sets && ex.sets[0] ? (ex.sets[0].weight || 0) : 0;
+        
+        exercisesHtml += `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+                <div style="text-align: right; flex: 1;">
+                    <div style="font-weight: 700; font-size: 15px; color: white;">${ex.name}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">משקל נוכחי: ${currentWeight} ק"ג</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-right: 10px;">
+                    <span style="font-size: 16px; color: var(--success-color); font-weight: bold;">+</span>
+                    <input type="number" class="exercise-increase-input" data-index="${idx}" value="2.5" step="0.5" min="0" 
+                        style="width: 70px; text-align: center; font-size: 18px; font-weight: 700; border: 2px solid var(--accent-color); border-radius: 8px; background: rgba(15,23,42,0.9); color: white; padding: 5px;">
+                    <span style="font-size: 12px; font-weight: 600;">ק"ג</span>
+                </div>
+            </div>
+        `;
+    });
+
+    msgEl.innerHTML = `
+        <div style="text-align: center; direction: rtl;">
+            <i class="fa-solid fa-trophy" style="font-size: 36px; color: #fbbf24; margin-bottom: 15px; filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.4));"></i>
+            <h3 style="margin-bottom: 8px; font-size: 20px; color: white;">אימון קודם מושלם!</h3>
+            <p style="margin-bottom: 20px; font-size: 15px; color: var(--text-secondary);">בכמה תרצה להעלות משקל לכל תרגיל?</p>
+            <div style="max-height: 50vh; overflow-y: auto; padding: 5px; margin-bottom: 10px;" class="custom-scrollbar">
+                ${exercisesHtml}
+            </div>
+        </div>
+    `;
+    
+    btnContainer.innerHTML = `
+        <button class="modal-btn modal-btn-cancel" id="modal-skip-btn" style="flex: 1;">ללא שינוי</button>
+        <button class="modal-btn modal-btn-confirm" id="modal-increase-btn" style="flex: 1.5;">עדכן משקלים והתחל</button>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    document.getElementById('modal-skip-btn').onclick = () => {
+        modal.style.display = 'none';
+        callback();
+    };
+    
+    document.getElementById('modal-increase-btn').onclick = () => {
+        const inputs = document.querySelectorAll('.exercise-increase-input');
+        let anyChange = false;
+        
+        inputs.forEach(input => {
+            const idx = parseInt(input.dataset.index);
+            const increase = parseFloat(input.value) || 0;
+            if (increase > 0) {
+                anyChange = true;
+                plan.exercises[idx].sets.forEach(set => {
+                    set.weight = (parseFloat(set.weight) || 0) + increase;
+                });
+            }
+        });
+
+        if (anyChange) {
+            saveAllPlans();
+            renderWorkoutsList();
+            renderCurrentPlan();
+        }
+        
+        modal.style.display = 'none';
+        callback();
+    };
+}
+
 function startWorkout(id) {
     const plan = workoutPlans.find(p => p.id === id);
     if (!plan) return;
@@ -432,6 +532,28 @@ function startWorkout(id) {
 }
 
 function performStartWorkout(id) {
+    const plan = workoutPlans.find(p => p.id === id);
+    if (!plan) return;
+
+    // Check history for progressive overload
+    const savedHistory = localStorage.getItem('fitbud_history');
+    if (savedHistory) {
+        const history = JSON.parse(savedHistory);
+        // Find latest entry for this plan
+        const lastSession = history.find(entry => entry.planId === id || (entry.workoutName === plan.name && !entry.planId));
+        
+        if (lastSession && isPerfectWorkout(lastSession)) {
+            showWeightIncreaseModal(plan, () => {
+                startActiveWorkout(id);
+            });
+            return;
+        }
+    }
+
+    startActiveWorkout(id);
+}
+
+function startActiveWorkout(id) {
     activeWorkoutId = id;
     activeWorkoutState = {}; // Reset state for new session
     localStorage.setItem('fitbud_active_workout_id', activeWorkoutId);
@@ -439,6 +561,9 @@ function performStartWorkout(id) {
     
     renderActiveWorkout();
     switchTab('activity');
+    
+    // Scroll to top of activity
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function saveAllPlans() {
@@ -1127,6 +1252,7 @@ async function finishWorkout() {
     
     const historyEntry = {
         id: Date.now().toString(),
+        planId: activeWorkoutId,
         date: new Date().toLocaleString('he-IL'),
         workoutName: activePlan.name,
         workout: JSON.parse(JSON.stringify(activePlan.exercises)),
@@ -1205,14 +1331,35 @@ function renderHistory() {
         
         let exercisesHtml = '';
         entry.workout.forEach(ex => {
-            let doneCount = 0;
-            ex.sets.forEach((_, idx) => {
-                if (entry.state.hasOwnProperty(`${ex.id}-${idx}`)) doneCount++;
+            const performedSets = [];
+            ex.sets.forEach((setData, idx) => {
+                const stateKey = `${ex.id}-${idx}`;
+                if (entry.state.hasOwnProperty(stateKey)) {
+                    const reps = entry.state[stateKey];
+                    const weight = typeof setData === 'object' ? setData.weight : 0;
+                    performedSets.push({ reps, weight });
+                }
             });
             
+            let setsSummary = '';
+            if (performedSets.length > 0) {
+                // If all sets have same reps and weight, simplify the display
+                const first = performedSets[0];
+                const allSame = performedSets.every(s => s.reps === first.reps && s.weight === first.weight);
+                
+                if (allSame && performedSets.length > 1) {
+                    setsSummary = `${performedSets.length} × ${first.reps} [${first.weight}ק"ג]`;
+                } else {
+                    setsSummary = performedSets.map(s => `${s.reps}×${s.weight}`).join(', ') + ' ק"ג';
+                }
+            } else {
+                setsSummary = 'לא בוצע';
+            }
+            
             exercisesHtml += `
-                <div style="margin-top: 10px; font-size: 15px; color: var(--text-secondary);">
-                    <strong>${ex.name}</strong>: ${doneCount}/${ex.sets.length} סטים בוצעו
+                <div style="margin-top: 10px; font-size: 14px; color: var(--text-secondary); border-right: 2px solid var(--accent-color); padding-right: 10px; margin-bottom: 5px;">
+                    <div style="color: var(--text-primary); font-weight: 600;">${ex.name}</div>
+                    <div style="font-size: 13px;">${performedSets.length}/${ex.sets.length} סטים | ${setsSummary}</div>
                 </div>
             `;
         });
