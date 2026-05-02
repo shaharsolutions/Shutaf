@@ -59,10 +59,9 @@ function showInstallPromotion() {
                 deferredPrompt = null;
             });
         } else {
-            // Manual instructions fallback
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             if (isIOS) {
-                customAlert('התקנה באייפון: לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ למעלה) ובחר ב-"הוסף למסך הבית".');
+                showIOSInstallGuide();
             } else {
                 customAlert('להתקנת האפליקציה: לחץ על שלוש הנקודות בתפריט הדפדפן ובחר ב-"התקן אפליקציה" או "הוסף למסך הבית".');
             }
@@ -83,6 +82,45 @@ function showInstallPromotion() {
     }
 }
 
+function showIOSInstallGuide() {
+    const modal = document.getElementById('custom-modal');
+    const msgEl = document.getElementById('modal-message');
+    const btnContainer = document.getElementById('modal-buttons');
+    
+    if (!modal || !msgEl || !btnContainer) return;
+    
+    msgEl.innerHTML = `
+        <div class="ios-install-guide">
+            <div class="guide-header">
+                <i class="fa-solid fa-mobile-screen-button"></i>
+                <h3>התקנה באייפון</h3>
+            </div>
+            <p>הוסיפו את <strong>שותף</strong> למסך הבית לגישה מהירה:</p>
+            <div class="guide-steps">
+                <div class="step">
+                    <span class="step-num">1</span>
+                    <p>לחצו על כפתור ה<strong>שיתוף</strong> <i class="fa-solid fa-arrow-up-from-bracket" style="color: #38bdf8;"></i></p>
+                </div>
+                <div class="step">
+                    <span class="step-num">2</span>
+                    <p>בחרו ב-<strong>"הוסף למסך הבית"</strong> <i class="fa-solid fa-square-plus"></i></p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    btnContainer.innerHTML = `
+        <button class="modal-btn modal-btn-confirm" id="modal-close-guide" style="width: 100%;">הבנתי, תודה</button>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    document.getElementById('modal-close-guide').onclick = () => {
+        modal.style.display = 'none';
+        msgEl.innerHTML = '';
+    };
+}
+
 function hideInstallPromotion() {
     const installBtn = document.getElementById('install-btn');
     const installCard = document.getElementById('install-card');
@@ -97,7 +135,7 @@ function checkIOSInstallation(forceShowAlert = false) {
     
     if (isIOS && !isStandalone) {
         if (forceShowAlert) {
-            customAlert('התקנה באייפון: לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ למעלה) ובחר ב-"הוסף למסך הבית".');
+            showIOSInstallGuide();
         } else {
             showInstallPromotion();
         }

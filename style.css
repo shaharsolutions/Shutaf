@@ -789,6 +789,76 @@ footer {
     border-color: var(--text-secondary);
 }
 
+/* iOS Install Guide */
+.ios-install-guide {
+    text-align: right;
+    padding: 10px 5px;
+}
+
+.guide-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    color: var(--accent-color);
+}
+
+.guide-header i {
+    font-size: 28px;
+}
+
+.guide-header h3 {
+    font-size: 20px;
+    margin: 0;
+}
+
+.ios-install-guide p {
+    margin-bottom: 20px;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.guide-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px 15px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+}
+
+.step-num {
+    background: var(--accent-gradient);
+    color: #0f172a;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.step p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.step i {
+    font-size: 18px;
+    vertical-align: middle;
+}
+
 /* Responsive - Mobile Perfection */
 @media (max-width: 768px) {
     .app-container {
