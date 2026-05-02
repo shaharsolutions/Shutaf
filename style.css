@@ -544,6 +544,18 @@ footer {
     border-top: 1px solid var(--glass-border);
 }
 
+footer a {
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: var(--transition);
+    font-weight: 600;
+}
+
+footer a:hover {
+    color: var(--text-primary);
+    text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
 /* Timer Widget */
 .timer-widget {
     position: fixed;
