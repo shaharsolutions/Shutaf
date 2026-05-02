@@ -318,17 +318,22 @@ async function handleAuth() {
 
 async function handleGoogleLogin() {
     const provider = new GoogleAuthProvider();
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
     try {
-        if (isMobile) {
-            await signInWithRedirect(auth, provider);
-        } else {
-            await signInWithPopup(auth, provider);
-        }
+        // Attempt popup first - more reliable on iOS/Safari and PWAs
+        await signInWithPopup(auth, provider);
     } catch (error) {
         console.error("Google Auth error:", error);
-        if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+        
+        // Fallback to redirect only if popup is blocked
+        if (error.code === 'auth/popup-blocked') {
+            try {
+                await signInWithRedirect(auth, provider);
+            } catch (redirError) {
+                console.error("Redirect error:", redirError);
+                customAlert('הדפדפן חסם את חלון ההתחברות. נסה לאפשר חלונות קופצים או להשתמש בדפדפן אחר.');
+            }
+        } else if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
             customAlert('אירעה שגיאה בהתחברות עם Google. וודא שחלונות קופצים מאושרים או נסה שוב.');
         }
     }
