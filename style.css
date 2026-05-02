@@ -801,8 +801,8 @@ footer {
 /* Custom Datetime Picker for Modal */
 .modal-datetime-input {
     width: 100%;
-    background: rgba(15, 23, 42, 0.8) !important;
-    border: 1px solid var(--accent-color) !important;
+    background: rgba(15, 23, 42, 0.9) !important;
+    border: 2px solid var(--accent-color) !important;
     color: var(--text-primary) !important;
     padding: 15px !important;
     border-radius: var(--radius-md) !important;
@@ -812,13 +812,23 @@ footer {
     appearance: none;
     -webkit-appearance: none;
     font-family: 'Outfit', sans-serif;
-    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.1);
+    box-shadow: 0 4px 20px rgba(56, 189, 248, 0.2);
+    display: block;
+    cursor: pointer;
 }
 
 .modal-datetime-input:focus {
     outline: none !important;
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3) !important;
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4) !important;
+    background: var(--secondary-bg) !important;
 }
+
+/* Specific fix for iOS to make it look like a button */
+.modal-datetime-input::-webkit-date-and-time-value {
+    text-align: center;
+    min-height: 1.5em;
+}
+
 
 /* Fix for iOS datetime-local icon/styling */
 ::-webkit-calendar-picker-indicator {

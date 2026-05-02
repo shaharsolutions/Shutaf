@@ -1383,11 +1383,14 @@ function renderHistory() {
                 </div>
             </div>
             <div>${exercisesHtml}</div>
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button class="btn btn-primary" onclick="loadWorkoutFromHistory('${entry.id}')" style="padding: 8px 15px; font-size: 14px; width: auto;">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-primary" onclick="loadWorkoutFromHistory('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px;">
                     <i class="fa-solid fa-rotate-left"></i> טען לאימון חדש
                 </button>
-                <button class="remove-btn" onclick="deleteHistoryItem('${entry.id}')" style="font-size: 14px; display: flex; align-items: center; gap: 5px;" title="מחק מההיסטוריה">
+                <button class="btn btn-primary" onclick="editHistoryPerformance('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);">
+                    <i class="fa-solid fa-pen-to-square"></i> ערוך ביצוע
+                </button>
+                <button class="remove-btn" onclick="deleteHistoryItem('${entry.id}')" style="font-size: 13px; display: flex; align-items: center; gap: 5px; padding: 8px;" title="מחק מההיסטוריה">
                     <i class="fa-solid fa-trash-can"></i> מחק
                 </button>
             </div>
@@ -1496,6 +1499,111 @@ function editHistoryDate(id) {
             // Sync to Firebase
             syncHistoryToFirebase(history);
         }
+    };
+}
+
+function editHistoryPerformance(id) {
+    const savedHistory = localStorage.getItem('fitbud_history');
+    if (!savedHistory) return;
+    
+    let history = JSON.parse(savedHistory);
+    const entry = history.find(h => h.id === id);
+    if (!entry) return;
+
+    const modal = document.getElementById('custom-modal');
+    const msgEl = document.getElementById('modal-message');
+    const btnContainer = document.getElementById('modal-buttons');
+    
+    msgEl.style.textAlign = 'right';
+    msgEl.innerHTML = `
+        <div style="margin-bottom: 20px; font-weight: 700; font-size: 20px; color: var(--accent-color); border-bottom: 1px solid var(--glass-border); padding-bottom: 10px;">עריכת ביצועי אימון</div>
+        <div id="history-edit-container" style="max-height: 60vh; overflow-y: auto; padding: 0 5px; margin-bottom: 10px;">
+            ${entry.workout.map((ex, exIdx) => `
+                <div style="margin-bottom: 15px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--glass-border);">
+                    <div style="font-weight: 600; margin-bottom: 10px; color: var(--text-primary); font-size: 15px;">${ex.name}</div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        ${ex.sets.map((setData, setIdx) => {
+                            const stateKey = `${ex.id}-${setIdx}`;
+                            const reps = entry.state[stateKey] || 0;
+                            const weight = (typeof setData === 'object') ? setData.weight : 0;
+                            return `
+                                <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                                    <span style="min-width: 40px; color: var(--text-secondary);">סט ${setIdx + 1}:</span>
+                                    <div style="display: flex; gap: 6px; flex: 1;">
+                                        <div style="flex: 1; display: flex; align-items: center; gap: 4px; background: rgba(15,23,42,0.4); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <input type="number" class="edit-history-reps" data-ex="${exIdx}" data-set="${setIdx}" value="${reps}" style="width: 40px; background: transparent; border: none; color: var(--text-primary); text-align: center; font-weight: 700; padding: 0;">
+                                            <span style="opacity: 0.7; font-size: 11px;">חז'</span>
+                                        </div>
+                                        <div style="flex: 1; display: flex; align-items: center; gap: 4px; background: rgba(15,23,42,0.4); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                            <input type="number" class="edit-history-weight" data-ex="${exIdx}" data-set="${setIdx}" value="${weight}" step="0.5" style="width: 45px; background: transparent; border: none; color: var(--accent-color); text-align: center; font-weight: 700; padding: 0;">
+                                            <span style="opacity: 0.7; font-size: 11px;">ק"ג</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    btnContainer.innerHTML = `
+        <button class="modal-btn modal-btn-cancel" id="modal-cancel-edit-btn">
+            <i class="fa-solid fa-xmark" style="margin-left: 8px;"></i> ביטול
+        </button>
+        <button class="modal-btn modal-btn-confirm" id="modal-save-performance-btn">
+            <i class="fa-solid fa-floppy-disk" style="margin-left: 8px;"></i> שמור
+        </button>
+    `;
+    
+    modal.style.display = 'flex';
+    
+    document.getElementById('modal-cancel-edit-btn').onclick = () => {
+        modal.style.display = 'none';
+        renderHistory();
+    };
+
+    document.getElementById('modal-save-performance-btn').onclick = async () => {
+        const repInputs = document.querySelectorAll('.edit-history-reps');
+        const weightInputs = document.querySelectorAll('.edit-history-weight');
+        
+        let completedSets = 0;
+        
+        repInputs.forEach(input => {
+            const exIdx = parseInt(input.dataset.ex);
+            const setIdx = parseInt(input.dataset.set);
+            const reps = parseInt(input.value) || 0;
+            const ex = entry.workout[exIdx];
+            const stateKey = `${ex.id}-${setIdx}`;
+            
+            if (reps > 0) {
+                entry.state[stateKey] = reps;
+                completedSets++;
+            } else {
+                delete entry.state[stateKey];
+            }
+        });
+
+        weightInputs.forEach(input => {
+            const exIdx = parseInt(input.dataset.ex);
+            const setIdx = parseInt(input.dataset.set);
+            const weight = parseFloat(input.value) || 0;
+            const ex = entry.workout[exIdx];
+            
+            if (typeof ex.sets[setIdx] === 'object') {
+                ex.sets[setIdx].weight = weight;
+            } else {
+                ex.sets[setIdx] = { reps: ex.sets[setIdx], weight: weight };
+            }
+        });
+        
+        entry.stats.completedSets = completedSets;
+        
+        localStorage.setItem('fitbud_history', JSON.stringify(history));
+        renderHistory();
+        modal.style.display = 'none';
+        syncHistoryToFirebase(history);
     };
 }
 
@@ -1818,4 +1926,5 @@ window.finishWorkout = finishWorkout;
 window.loadWorkoutFromHistory = loadWorkoutFromHistory;
 window.deleteHistoryItem = deleteHistoryItem;
 window.editHistoryDate = editHistoryDate;
+window.editHistoryPerformance = editHistoryPerformance;
 window.selectWorkout = selectWorkout;
