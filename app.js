@@ -15,7 +15,13 @@ import {
     signOut,
     signInWithPopup
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { auth, GoogleAuthProvider } from './firebase-config.js';
+import { 
+    auth, 
+    GoogleAuthProvider, 
+    signInWithRedirect, 
+    getRedirectResult,
+    signInWithPopup 
+} from './firebase-config.js';
 
 // State Management
 let workoutPlans = [];
@@ -250,6 +256,14 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(reg => console.log('Service Worker registered'))
             .catch(err => console.error('Service Worker registration failed', err));
     }
+
+    // Handle Google Redirect Result
+    getRedirectResult(auth).catch((error) => {
+        console.error("Google Redirect error:", error);
+        if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+            customAlert('אירעה שגיאה בתהליך ההתחברות עם Google.');
+        }
+    });
 });
 
 // Auth Functions
@@ -304,12 +318,18 @@ async function handleAuth() {
 
 async function handleGoogleLogin() {
     const provider = new GoogleAuthProvider();
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     try {
-        await signInWithPopup(auth, provider);
+        if (isMobile) {
+            await signInWithRedirect(auth, provider);
+        } else {
+            await signInWithPopup(auth, provider);
+        }
     } catch (error) {
         console.error("Google Auth error:", error);
-        if (error.code !== 'auth/popup-closed-by-user') {
-            customAlert('אירעה שגיאה בהתחברות עם Google.');
+        if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+            customAlert('אירעה שגיאה בהתחברות עם Google. וודא שחלונות קופצים מאושרים או נסה שוב.');
         }
     }
 }
