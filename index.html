@@ -5,8 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>אפליקציית הכושר שלך</title>
     <meta name="apple-mobile-web-app-title" content="שותף">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="icon" type="image/png" href="icon-512.png">
     <meta name="description" content="תכנן ועקוב אחר האימונים שלך בצורה פשוטה וחכמה עם שותף.">
     
     <!-- Performance: Preconnect and Preload -->
@@ -224,6 +226,13 @@
                 <div class="glass-card">
                     <h1 class="section-title"><i class="fa-solid fa-play"></i> מעקב אימון פעיל</h1>
                     
+                    <!-- Workout Duration Timer -->
+                    <div id="workout-duration-bar" class="workout-duration-bar" style="display: none; margin-bottom: 20px;">
+                        <i class="fa-solid fa-stopwatch"></i>
+                        <span>זמן אימון:</span>
+                        <span id="workout-duration-display">00:00:00</span>
+                    </div>
+
                     <div id="active-workout-container">
                         <!-- Active workout exercises will be rendered here -->
                         <div class="empty-state">

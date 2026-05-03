@@ -15,7 +15,15 @@ import {
     updateDoc,
     arrayUnion,
     arrayRemove,
-    onSnapshot
+    onSnapshot,
+    collection,
+    addDoc,
+    query,
+    orderBy,
+    getDocs,
+    limit,
+    where,
+    deleteDoc
 } from './firebase-config.js';
 
 // State Management
@@ -168,9 +176,14 @@ const elements = {
     workoutEditorCard: null,
     workoutNameInput: null,
     editorTitle: null,
-    miniTimer: null,
-    miniTimerDisplay: null
+    durationDisplay: null
 };
+
+let timerInterval = null;
+let workoutDurationInterval = null;
+let timerTargetTimestamp = null; // Task 3: Reliable Timer target
+let timeLeft = 90;
+let isTimerRunning = false;
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -199,6 +212,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.editorTitle = document.getElementById('editor-title');
     elements.miniTimer = document.getElementById('mini-timer');
     elements.miniTimerDisplay = document.getElementById('mini-timer-display');
+    elements.durationBar = document.getElementById('workout-duration-bar');
+    elements.durationDisplay = document.getElementById('workout-duration-display');
 
     // Auth Event Listeners
     const authToggleText = document.getElementById('auth-toggle-text');
@@ -392,7 +407,6 @@ async function loadUserData() {
             const data = userSnap.data();
             if (data.workoutPlans) {
                 workoutPlans = data.workoutPlans;
-                localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
                 renderWorkoutsList();
                 renderCurrentPlan();
             }
@@ -720,22 +734,33 @@ function startWorkout(id) {
     }
 }
 
-function performStartWorkout(id) {
+async function performStartWorkout(id) {
     const plan = workoutPlans.find(p => p.id === id);
     if (!plan) return;
 
-    // Check history for progressive overload
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (savedHistory) {
-        const history = JSON.parse(savedHistory);
-        // Find latest entry for this plan
-        const lastSession = history.find(entry => entry.planId === id || (entry.workoutName === plan.name && !entry.planId));
-        
-        if (lastSession && isPerfectWorkout(lastSession)) {
-            showWeightIncreaseModal(plan, () => {
-                startActiveWorkout(id);
+    // Check history for progressive overload - Task 1: Fetch from Firestore
+    if (currentUser) {
+        try {
+            const historyRef = collection(db, "users", currentUser.uid, "history");
+            const q = query(historyRef, orderBy("timestamp", "desc"), limit(10));
+            const querySnapshot = await getDocs(q);
+            
+            let lastSession = null;
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                if (!lastSession && (data.planId === id || data.workoutName === plan.name)) {
+                    lastSession = data;
+                }
             });
-            return;
+            
+            if (lastSession && isPerfectWorkout(lastSession)) {
+                showWeightIncreaseModal(plan, () => {
+                    startActiveWorkout(id);
+                });
+                return;
+            }
+        } catch (e) {
+            console.error("Error checking history for progressive overload:", e);
         }
     }
 
@@ -744,10 +769,13 @@ function performStartWorkout(id) {
 
 function startActiveWorkout(id) {
     activeWorkoutId = id;
-    activeWorkoutState = {}; // Reset state for new session
+    activeWorkoutState = {
+        startTime: Date.now()
+    };
     localStorage.setItem('fitbud_active_workout_id', activeWorkoutId);
-    localStorage.removeItem('fitbud_activity_state');
+    localStorage.setItem('fitbud_activity_state', JSON.stringify(activeWorkoutState));
     
+    startWorkoutDurationTimer();
     renderActiveWorkout();
     switchTab('activity');
     
@@ -755,20 +783,47 @@ function startActiveWorkout(id) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-async function saveAllPlans() {
-    localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
+function startWorkoutDurationTimer() {
+    if (workoutDurationInterval) clearInterval(workoutDurationInterval);
     
-    // Sync to Firebase
+    if (elements.durationBar) elements.durationBar.style.display = 'flex';
+    
+    updateWorkoutDurationDisplay();
+    
+    workoutDurationInterval = setInterval(() => {
+        updateWorkoutDurationDisplay();
+    }, 1000);
+}
+
+function updateWorkoutDurationDisplay() {
+    if (!activeWorkoutState || !activeWorkoutState.startTime || !elements.durationDisplay) return;
+    
+    const diff = Date.now() - activeWorkoutState.startTime;
+    elements.durationDisplay.innerText = formatDuration(diff);
+}
+
+function formatDuration(ms) {
+    if (!ms || ms < 0) return "00:00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+async function saveAllPlans() {
+    // Task 2: Firebase Persistence handles the "offline" state
     try {
         if (!currentUser) return;
         const userRef = doc(db, "users", currentUser.uid);
         await setDoc(userRef, { 
             workoutPlans: workoutPlans,
-            lastUpdated: new Date().toISOString()
+            restTime: restTime
         }, { merge: true });
         console.log("Plans synced to Firebase");
     } catch (e) {
-        console.error("Error syncing to Firebase:", e);
+        console.error("Error syncing plans to Firebase:", e);
     }
 }
 
@@ -1122,14 +1177,9 @@ function saveWorkoutPlan() {
     }
 }
 
-// Load Plan from Local Storage and Firebase
+// Load Plan from Firebase - Task 2: Relying on Firebase Persistence
 async function loadPlanFromStorage(uid) {
-    // 1. Load from Local Storage (Immediate UI response)
-    const savedPlans = localStorage.getItem('fitbud_plans');
-    if (savedPlans) {
-        workoutPlans = JSON.parse(savedPlans);
-    }
-    
+    // Keep localStorage ONLY for ephemeral active-workout state as per Task 2
     const savedActiveId = localStorage.getItem('fitbud_active_workout_id');
     if (savedActiveId) {
         activeWorkoutId = savedActiveId;
@@ -1139,19 +1189,13 @@ async function loadPlanFromStorage(uid) {
     if (savedState) {
         activeWorkoutState = JSON.parse(savedState);
     }
-    
-    const savedRestTime = localStorage.getItem('fitbud_rest_time');
-    if (savedRestTime) {
-        restTime = parseInt(savedRestTime);
-        const restInput = document.getElementById('global-rest-time');
-        if (restInput) restInput.value = restTime;
+
+    if (activeWorkoutId && activeWorkoutState.startTime) {
+        renderActiveWorkout();
+        startWorkoutDurationTimer();
     }
 
-    renderWorkoutsList();
-    renderCurrentPlan();
-    renderActiveWorkout();
-
-    // 2. Sync from Firebase (Real-time updates)
+    // Task 2: Firebase Persistence handles the "offline" state for plans and history
     if (!uid) return;
     try {
         const userRef = doc(db, "users", uid);
@@ -1169,11 +1213,8 @@ async function loadPlanFromStorage(uid) {
 
                 // Sync plans
                 if (data.workoutPlans) {
-                    // Simple check to see if we should update local plans
-                    // In a production app, we'd use timestamps or deeper comparison
                     if (JSON.stringify(workoutPlans) !== JSON.stringify(data.workoutPlans)) {
                         workoutPlans = data.workoutPlans;
-                        localStorage.setItem('fitbud_plans', JSON.stringify(workoutPlans));
                         needsReRender = true;
                     }
                 }
@@ -1181,19 +1222,9 @@ async function loadPlanFromStorage(uid) {
                 // Sync rest time
                 if (data.restTime && data.restTime !== restTime) {
                     restTime = data.restTime;
-                    localStorage.setItem('fitbud_rest_time', restTime);
                     const restInput = document.getElementById('global-rest-time');
                     if (restInput) restInput.value = restTime;
                     needsReRender = true;
-                }
-                
-                // Sync history
-                if (data.history) {
-                    const localHistory = localStorage.getItem('fitbud_history');
-                    if (localHistory !== JSON.stringify(data.history)) {
-                        localStorage.setItem('fitbud_history', JSON.stringify(data.history));
-                        renderHistory();
-                    }
                 }
                 
                 if (needsReRender) {
@@ -1235,6 +1266,11 @@ function renderActiveWorkout() {
     const activePlan = workoutPlans.find(p => p.id === activeWorkoutId);
     
     if (!activePlan || activePlan.exercises.length === 0) {
+        if (elements.durationBar) elements.durationBar.style.display = 'none';
+        if (workoutDurationInterval) {
+            clearInterval(workoutDurationInterval);
+            workoutDurationInterval = null;
+        }
         container.innerHTML = `
             <div class="empty-state">
                 <i class="fa-solid fa-dumbbell"></i>
@@ -1246,6 +1282,10 @@ function renderActiveWorkout() {
         return;
     }
     
+    if (elements.durationBar) elements.durationBar.style.display = 'flex';
+    if (activeWorkoutState.startTime && !workoutDurationInterval) {
+        startWorkoutDurationTimer();
+    }
     if (actionsDiv) actionsDiv.style.display = 'flex';
     
     const fragment = document.createDocumentFragment();
@@ -1338,14 +1378,11 @@ function toggleSetComplete(exerciseId, setIndex, element, originalReps) {
     localStorage.setItem('fitbud_activity_state', JSON.stringify(activeWorkoutState));
 }
 
-// Timer Logic
-let timerInterval = null;
-let timeLeft = 90;
-let isTimerRunning = false;
-
+// Timer Logic - Task 3: Mobile-Reliable Timers
 function startTimer(seconds = 90) {
     clearInterval(timerInterval);
     timeLeft = seconds;
+    timerTargetTimestamp = Date.now() + (seconds * 1000);
     isTimerRunning = true;
     
     // Show mini timer
@@ -1354,8 +1391,10 @@ function startTimer(seconds = 90) {
     updateTimerDisplay();
     updateTimerToggleIcon();
     
+    // Task 3: Use setInterval ONLY to update UI based on target timestamp
     timerInterval = setInterval(() => {
-        timeLeft--;
+        const remaining = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
+        timeLeft = remaining;
         updateTimerDisplay();
         
         if (timeLeft <= 0) {
@@ -1364,7 +1403,7 @@ function startTimer(seconds = 90) {
             updateTimerToggleIcon();
             flashTimerDisplay();
         }
-    }, 1000);
+    }, 200); // More frequent updates for smoother UI
 }
 
 function updateTimerDisplay() {
@@ -1388,12 +1427,16 @@ function toggleTimer() {
     if (isTimerRunning) {
         clearInterval(timerInterval);
         isTimerRunning = false;
+        // Task 3: Save remaining time if paused
+        timeLeft = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
     } else {
-        if (timeLeft <= 0) timeLeft = 90;
+        if (timeLeft <= 0) timeLeft = restTime || 90;
         isTimerRunning = true;
+        timerTargetTimestamp = Date.now() + (timeLeft * 1000);
         
         timerInterval = setInterval(() => {
-            timeLeft--;
+            const remaining = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
+            timeLeft = remaining;
             updateTimerDisplay();
             if (timeLeft <= 0) {
                 clearInterval(timerInterval);
@@ -1401,7 +1444,7 @@ function toggleTimer() {
                 updateTimerToggleIcon();
                 flashTimerDisplay();
             }
-        }, 1000);
+        }, 200);
     }
     updateTimerToggleIcon();
 }
@@ -1409,6 +1452,11 @@ function toggleTimer() {
 function adjustTimer(amount) {
     timeLeft += amount;
     if (timeLeft < 0) timeLeft = 0;
+    
+    // Task 3: Update target timestamp if running
+    if (isTimerRunning) {
+        timerTargetTimestamp = Date.now() + (timeLeft * 1000);
+    }
     updateTimerDisplay();
 }
 
@@ -1445,38 +1493,36 @@ async function finishWorkout() {
         });
     });
     
+    const durationMs = activeWorkoutState.startTime ? (Date.now() - activeWorkoutState.startTime) : 0;
+    
     const historyEntry = {
-        id: Date.now().toString(),
         planId: activeWorkoutId,
+        timestamp: Date.now(), // Task 1: Added for better sorting in subcollections
         date: new Date().toLocaleString('he-IL'),
         workoutName: activePlan.name,
         workout: JSON.parse(JSON.stringify(activePlan.exercises)),
         state: activeWorkoutState,
+        duration: formatDuration(durationMs),
         stats: {
             totalSets,
             completedSets
         }
     };
     
-    // Load existing history
-    let history = [];
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (savedHistory) {
-        history = JSON.parse(savedHistory);
-    }
-    
-    // Add new entry to beginning
-    history.unshift(historyEntry);
-    
-    // Save back to storage
-    localStorage.setItem('fitbud_history', JSON.stringify(history));
-    
-    // Sync to Firebase
-    syncHistoryToFirebase(history);
+    // Task 1: Save as separate document in subcollection
+    saveHistoryEntryToFirebase(historyEntry);
     
     // Clear active state
     activeWorkoutState = {};
+    activeWorkoutId = null;
+    if (workoutDurationInterval) {
+        clearInterval(workoutDurationInterval);
+        workoutDurationInterval = null;
+    }
+    if (elements.durationBar) elements.durationBar.style.display = 'none';
+    
     localStorage.removeItem('fitbud_activity_state');
+    localStorage.removeItem('fitbud_active_workout_id');
     
     customAlert('האימון נשמר בהיסטוריה בהצלחה!', () => {
         switchTab('history');
@@ -1487,6 +1533,12 @@ function stopWorkout() {
     customConfirm('האם אתה בטוח שברצונך לעצור את האימון? ההתקדמות הנוכחית לא תישמר.', () => {
         activeWorkoutId = null;
         activeWorkoutState = {};
+        if (workoutDurationInterval) {
+            clearInterval(workoutDurationInterval);
+            workoutDurationInterval = null;
+        }
+        if (elements.durationBar) elements.durationBar.style.display = 'none';
+        
         localStorage.removeItem('fitbud_active_workout_id');
         localStorage.removeItem('fitbud_activity_state');
         if (typeof closeTimer === 'function') closeTimer();
@@ -1494,144 +1546,165 @@ function stopWorkout() {
     });
 }
 
-// Helper to sync history to Firebase
-async function syncHistoryToFirebase(history) {
+// Task 1: Save history entry to subcollection
+async function saveHistoryEntryToFirebase(entry) {
     try {
         if (!currentUser) return;
-        const userRef = doc(db, "users", currentUser.uid);
-        await setDoc(userRef, { history: history }, { merge: true });
-        console.log("History synced to Firebase");
+        const historyRef = collection(db, "users", currentUser.uid, "history");
+        await addDoc(historyRef, entry);
+        console.log("Workout entry saved to Firestore subcollection");
     } catch (e) {
-        console.error("Error syncing history to Firebase:", e);
+        console.error("Error saving history entry:", e);
     }
 }
 
-function renderHistory() {
+// Task 1: Fetch and render history from Firestore subcollection
+async function renderHistory() {
     const list = elements.historyList;
     if (!list) return;
     
-    let history = [];
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (savedHistory) {
-        history = JSON.parse(savedHistory);
-    }
-    
-    if (history.length === 0) {
-        list.innerHTML = `
-            <div class="empty-state">
-                <i class="fa-solid fa-calendar-xmark"></i>
-                <p>עדיין אין אימונים שמורים בהיסטוריה.</p>
-            </div>
-        `;
+    if (!currentUser) {
+        list.innerHTML = '<p style="text-align:center; padding:20px;">התחבר כדי לצפות בהיסטוריה.</p>';
         return;
     }
+
+    list.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 10px;"></i>
+            <p>טוען היסטוריה...</p>
+        </div>
+    `;
     
-    const fragment = document.createDocumentFragment();
-    history.forEach(entry => {
-        const card = document.createElement('div');
-        card.className = 'glass-card history-item';
-        card.style.marginBottom = '15px';
-        card.style.padding = '20px';
-        card.style.background = 'var(--glass-bg)';
-        card.style.border = '1px solid var(--glass-border)';
-        card.style.borderRadius = 'var(--radius-md)';
+    try {
+        const historyRef = collection(db, "users", currentUser.uid, "history");
+        const q = query(historyRef, orderBy("timestamp", "desc"), limit(50));
+        const querySnapshot = await getDocs(q);
         
-        let exercisesHtml = '';
-        entry.workout.forEach(ex => {
-            const performedSets = [];
-            ex.sets.forEach((setData, idx) => {
-                const stateKey = `${ex.id}-${idx}`;
-                if (entry.state.hasOwnProperty(stateKey)) {
-                    const reps = entry.state[stateKey];
-                    const weight = typeof setData === 'object' ? setData.weight : 0;
-                    performedSets.push({ reps, weight });
-                }
-            });
-            
-            let setsSummary = '';
-            if (performedSets.length > 0) {
-                // If all sets have same reps and weight, simplify the display
-                const first = performedSets[0];
-                const allSame = performedSets.every(s => s.reps === first.reps && s.weight === first.weight);
-                
-                if (allSame && performedSets.length > 1) {
-                    setsSummary = `${performedSets.length} × ${first.reps} [${first.weight}ק"ג]`;
-                } else {
-                    setsSummary = performedSets.map(s => `${s.reps}×${s.weight}`).join(', ') + ' ק"ג';
-                }
-            } else {
-                setsSummary = 'לא בוצע';
-            }
-            
-            exercisesHtml += `
-                <div style="margin-top: 10px; font-size: 14px; color: var(--text-secondary); border-right: 2px solid var(--accent-color); padding-right: 10px; margin-bottom: 5px;">
-                    <div style="color: var(--text-primary); font-weight: 600;">${ex.name}</div>
-                    <div style="font-size: 13px;">${performedSets.length}/${ex.sets.length} סטים | ${setsSummary}</div>
-                </div>
-            `;
+        const history = [];
+        querySnapshot.forEach((doc) => {
+            history.push({ id: doc.id, ...doc.data() });
         });
         
-        card.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
-                <div style="text-align: right;">
-                    <div style="font-weight: 600; font-size: 16px; color: var(--accent-color); display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-calendar-day"></i> 
-                        <span>${entry.date}</span>
-                        <button class="edit-btn" onclick="editHistoryDate('${entry.id}')" style="font-size: 12px; opacity: 0.7; padding: 2px 5px;" title="ערוך תאריך">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
+        if (history.length === 0) {
+            list.innerHTML = `
+                <div class="empty-state">
+                    <i class="fa-solid fa-calendar-xmark"></i>
+                    <p>עדיין אין אימונים שמורים בהיסטוריה.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        const fragment = document.createDocumentFragment();
+        history.forEach(entry => {
+            const card = document.createElement('div');
+            card.className = 'glass-card history-item';
+            card.style.marginBottom = '15px';
+            card.style.padding = '20px';
+            card.style.background = 'var(--glass-bg)';
+            card.style.border = '1px solid var(--glass-border)';
+            card.style.borderRadius = 'var(--radius-md)';
+            
+            let exercisesHtml = '';
+            entry.workout.forEach(ex => {
+                const performedSets = [];
+                ex.sets.forEach((setData, idx) => {
+                    const stateKey = `${ex.id}-${idx}`;
+                    if (entry.state && entry.state.hasOwnProperty(stateKey)) {
+                        const reps = entry.state[stateKey];
+                        const weight = typeof setData === 'object' ? setData.weight : 0;
+                        performedSets.push({ reps, weight });
+                    }
+                });
+                
+                let setsSummary = '';
+                if (performedSets.length > 0) {
+                    const first = performedSets[0];
+                    const allSame = performedSets.every(s => s.reps === first.reps && s.weight === first.weight);
+                    
+                    if (allSame && performedSets.length > 1) {
+                        setsSummary = `${performedSets.length} × ${first.reps} [${first.weight}ק"ג]`;
+                    } else {
+                        setsSummary = performedSets.map(s => `${s.reps}×${s.weight}`).join(', ') + ' ק"ג';
+                    }
+                } else {
+                    setsSummary = 'לא בוצע';
+                }
+                
+                exercisesHtml += `
+                    <div style="margin-top: 10px; font-size: 14px; color: var(--text-secondary); border-right: 2px solid var(--accent-color); padding-right: 10px; margin-bottom: 5px;">
+                        <div style="color: var(--text-primary); font-weight: 600;">${ex.name}</div>
+                        <div style="font-size: 13px;">${performedSets.length}/${ex.sets.length} סטים | ${setsSummary}</div>
                     </div>
-                    <div style="font-size: 14px; color: var(--text-primary); margin-top: 4px; font-weight: 600;">
-                        ${entry.workoutName || 'אימון'}
+                `;
+            });
+            
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+                    <div style="text-align: right;">
+                        <div style="font-weight: 600; font-size: 16px; color: var(--accent-color); display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-calendar-day"></i> 
+                            <span>${entry.date}</span>
+                            <button class="edit-btn" onclick="editHistoryDate('${entry.id}')" style="font-size: 12px; opacity: 0.7; padding: 2px 5px;" title="ערוך תאריך">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                        </div>
+                        <div style="font-size: 14px; color: var(--text-primary); margin-top: 4px; font-weight: 600;">
+                            ${entry.workoutName || 'אימון'}
+                        </div>
+                    </div>
+                    <div style="font-weight: bold; color: var(--success-color); text-align: left;">
+                        <div>${entry.stats.completedSets}/${entry.stats.totalSets} סטים</div>
+                        <div style="font-size: 13px; color: var(--accent-color); margin-top: 4px; display: flex; align-items: center; gap: 5px; justify-content: flex-end;">
+                            <i class="fa-solid fa-stopwatch" style="font-size: 12px;"></i>
+                            <span>${entry.duration || '--:--'}</span>
+                        </div>
                     </div>
                 </div>
-                <div style="font-weight: bold; color: var(--success-color);">
-                    ${entry.stats.completedSets}/${entry.stats.totalSets} סטים סה"כ
+                <div>${exercisesHtml}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-primary" onclick="editHistoryPerformance('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);">
+                        <i class="fa-solid fa-pen-to-square"></i> ערוך ביצוע
+                    </button>
+                    <button class="remove-btn" onclick="deleteHistoryItem('${entry.id}')" style="font-size: 13px; display: flex; align-items: center; gap: 5px; padding: 8px;" title="מחק מההיסטוריה">
+                        <i class="fa-solid fa-trash-can"></i> מחק
+                    </button>
                 </div>
-            </div>
-            <div>${exercisesHtml}</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-                <button class="btn btn-primary" onclick="editHistoryPerformance('${entry.id}')" style="padding: 8px 12px; font-size: 13px; width: auto; flex: 1; min-width: 140px; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);">
-                    <i class="fa-solid fa-pen-to-square"></i> ערוך ביצוע
-                </button>
-                <button class="remove-btn" onclick="deleteHistoryItem('${entry.id}')" style="font-size: 13px; display: flex; align-items: center; gap: 5px; padding: 8px;" title="מחק מההיסטוריה">
-                    <i class="fa-solid fa-trash-can"></i> מחק
-                </button>
-            </div>
-        `;
-        fragment.appendChild(card);
-    });
-    
-    list.innerHTML = '';
-    list.appendChild(fragment);
+            `;
+            fragment.appendChild(card);
+        });
+        
+        list.innerHTML = '';
+        list.appendChild(fragment);
+    } catch (e) {
+        console.error("Error loading history:", e);
+        list.innerHTML = '<p style="text-align:center; padding:20px; color:var(--error-color);">שגיאה בטעינת ההיסטוריה.</p>';
+    }
 }
 
 function deleteHistoryItem(id) {
     customConfirm('האם אתה בטוח שברצונך למחוק אימון זה מההיסטוריה?', async () => {
-        let history = [];
-        const savedHistory = localStorage.getItem('fitbud_history');
-        if (savedHistory) {
-            history = JSON.parse(savedHistory);
+        try {
+            if (!currentUser) return;
+            const entryRef = doc(db, "users", currentUser.uid, "history", id);
+            await deleteDoc(entryRef);
+            renderHistory();
+        } catch (e) {
+            console.error("Error deleting history item:", e);
+            customAlert("אירעה שגיאה במחיקת האימון.");
         }
-        
-        history = history.filter(entry => entry.id !== id);
-        localStorage.setItem('fitbud_history', JSON.stringify(history));
-        renderHistory();
-
-        // Sync to Firebase
-        syncHistoryToFirebase(history);
     });
 }
 
-function editHistoryDate(id) {
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (!savedHistory) return;
+async function editHistoryDate(id) {
+    if (!currentUser) return;
     
-    let history = JSON.parse(savedHistory);
-    const entryIndex = history.findIndex(h => h.id === id);
-    if (entryIndex === -1) return;
-    
-    const entry = history[entryIndex];
+    try {
+        const entryRef = doc(db, "users", currentUser.uid, "history", id);
+        const docSnap = await getDoc(entryRef);
+        
+        if (!docSnap.exists()) return;
+        const entry = docSnap.data();
     
     let currentDateTime;
     try {
@@ -1696,23 +1769,31 @@ function editHistoryDate(id) {
             // Better to sort by actual date objects.
             // But let's keep it simple for now as it's already sorted by ID (creation time) usually.
             
-            localStorage.setItem('fitbud_history', JSON.stringify(history));
-            renderHistory();
-            modal.style.display = 'none';
-            
-            // Sync to Firebase
-            syncHistoryToFirebase(history);
+            // Task 1: Update in Firestore subcollection
+            try {
+                await updateDoc(entryRef, { date: entry.date });
+                renderHistory();
+                modal.style.display = 'none';
+            } catch (e) {
+                console.error("Error updating history date:", e);
+                customAlert("אירעה שגיאה בעדכון התאריך.");
+            }
         }
     };
+} catch (e) {
+    console.error("Error loading history entry for edit:", e);
+}
 }
 
-function editHistoryPerformance(id) {
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (!savedHistory) return;
+async function editHistoryPerformance(id) {
+    if (!currentUser) return;
     
-    let history = JSON.parse(savedHistory);
-    const entry = history.find(h => h.id === id);
-    if (!entry) return;
+    try {
+        const entryRef = doc(db, "users", currentUser.uid, "history", id);
+        const docSnap = await getDoc(entryRef);
+        
+        if (!docSnap.exists()) return;
+        const entry = docSnap.data();
 
     const modal = document.getElementById('custom-modal');
     const msgEl = document.getElementById('modal-message');
@@ -1804,21 +1885,39 @@ function editHistoryPerformance(id) {
         
         entry.stats.completedSets = completedSets;
         
-        localStorage.setItem('fitbud_history', JSON.stringify(history));
         renderHistory();
-        modal.style.display = 'none';
-        syncHistoryToFirebase(history);
+        // Task 1: Update in Firestore subcollection
+        try {
+            await updateDoc(entryRef, {
+                workout: entry.workout,
+                state: entry.state,
+                stats: {
+                    totalSets: entry.stats.totalSets,
+                    completedSets: completedSets
+                }
+            });
+            renderHistory();
+            modal.style.display = 'none';
+        } catch (e) {
+            console.error("Error updating history performance:", e);
+            customAlert("אירעה שגיאה בעדכון הביצועים.");
+        }
     };
+} catch (e) {
+    console.error("Error loading history entry for edit:", e);
+}
 }
 
-function loadWorkoutFromHistory(historyId) {
-    const savedHistory = localStorage.getItem('fitbud_history');
-    if (!savedHistory) return;
+async function loadWorkoutFromHistory(historyId) {
+    if (!currentUser) return;
     
-    const history = JSON.parse(savedHistory);
-    const entry = history.find(h => h.id === historyId);
-    
-    if (entry) {
+    try {
+        const entryRef = doc(db, "users", currentUser.uid, "history", historyId);
+        const docSnap = await getDoc(entryRef);
+        
+        if (!docSnap.exists()) return;
+        const entry = docSnap.data();
+        
         customConfirm('האם ברצונך ליצור אימון חדש המבוסס על אימון זה מההיסטוריה?', () => {
             const newId = Date.now().toString();
             const newPlan = {
@@ -1836,9 +1935,12 @@ function loadWorkoutFromHistory(historyId) {
             
             // Scroll to the plan summary
             setTimeout(() => {
-                document.querySelector('.plan-summary').scrollIntoView({ behavior: 'smooth' });
+                const summary = document.querySelector('.plan-summary');
+                if (summary) summary.scrollIntoView({ behavior: 'smooth' });
             }, 100);
         });
+    } catch (e) {
+        console.error("Error loading workout from history:", e);
     }
 }
 

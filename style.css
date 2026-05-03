@@ -650,6 +650,27 @@ footer a:hover {
     font-family: 'Outfit', sans-serif;
 }
 
+/* Workout Duration Bar */
+.workout-duration-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: var(--radius-md);
+    color: var(--accent-color);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+}
+
+.workout-duration-bar i {
+    font-size: 20px;
+    animation: pulse 2s infinite;
+}
+
 /* Mini Timer Bar */
 .mini-timer-bar {
     background: var(--accent-gradient);
