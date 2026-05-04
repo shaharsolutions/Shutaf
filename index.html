@@ -254,7 +254,12 @@
             <!-- History Tab -->
             <section id="history-tab" class="tab-content">
                 <div class="glass-card">
-                    <h1 class="section-title"><i class="fa-solid fa-clock-rotate-left"></i> היסטוריית אימונים</h1>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h1 class="section-title" style="margin: 0;"><i class="fa-solid fa-clock-rotate-left"></i> היסטוריית אימונים</h1>
+                        <button id="export-history-btn" class="btn btn-secondary" onclick="exportHistoryToExcel()" style="width: auto; padding: 8px 15px; font-size: 14px;">
+                            <i class="fa-solid fa-file-excel"></i> ייצא לאקסל
+                        </button>
+                    </div>
                     
                     <div id="history-list" class="history-list">
                         <!-- Saved workouts will appear here -->

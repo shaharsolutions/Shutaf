@@ -1682,6 +1682,93 @@ async function renderHistory() {
     }
 }
 
+// Function to export workout history to Excel (CSV format)
+async function exportHistoryToExcel() {
+    if (!currentUser) {
+        customAlert("עליך להתחבר כדי לייצא נתונים.");
+        return;
+    }
+
+    const exportBtn = document.getElementById('export-history-btn');
+    if (!exportBtn) return;
+    
+    const originalBtnHtml = exportBtn.innerHTML;
+    exportBtn.disabled = true;
+    exportBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> מעבד...';
+
+    try {
+        const historyRef = collection(db, "users", currentUser.uid, "history");
+        const q = query(historyRef, orderBy("timestamp", "desc"));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            customAlert("אין נתוני היסטוריה לייצוא.");
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = originalBtnHtml;
+            return;
+        }
+
+        const rows = [];
+        // Header in Hebrew
+        rows.push(['תאריך', 'שם אימון', 'משך אימון', 'תרגיל', 'סט', 'חזרות', 'משקל (ק"ג)']);
+
+        querySnapshot.forEach((doc) => {
+            const entry = doc.data();
+            const date = entry.date || '';
+            const workoutName = entry.workoutName || 'אימון';
+            const duration = entry.duration || '';
+
+            if (entry.workout && Array.isArray(entry.workout)) {
+                entry.workout.forEach((ex) => {
+                    if (ex.sets && Array.isArray(ex.sets)) {
+                        ex.sets.forEach((setData, idx) => {
+                            const stateKey = `${ex.id}-${idx}`;
+                            // Export all sets that were performed (in state)
+                            if (entry.state && entry.state.hasOwnProperty(stateKey)) {
+                                const reps = entry.state[stateKey];
+                                const weight = typeof setData === 'object' ? setData.weight : 0;
+                                rows.push([
+                                    date,
+                                    workoutName,
+                                    duration,
+                                    ex.name,
+                                    idx + 1,
+                                    reps,
+                                    weight
+                                ]);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // Convert rows to CSV string
+        // Using semicolon for better Excel compatibility in some locales, 
+        // but comma with BOM is generally safe for UTF-8 in modern Excel.
+        const BOM = "\uFEFF";
+        const csvContent = BOM + rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+
+        // Trigger Download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `היסטוריית_אימונים_${new Date().toLocaleDateString('he-IL').replace(/\./g, '-')}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (e) {
+        console.error("Error exporting history:", e);
+        customAlert("אירעה שגיאה בייצוא הנתונים.");
+    } finally {
+        exportBtn.disabled = false;
+        exportBtn.innerHTML = originalBtnHtml;
+    }
+}
+
 function deleteHistoryItem(id) {
     customConfirm('האם אתה בטוח שברצונך למחוק אימון זה מההיסטוריה?', async () => {
         try {
@@ -2234,3 +2321,4 @@ window.deleteHistoryItem = deleteHistoryItem;
 window.editHistoryDate = editHistoryDate;
 window.editHistoryPerformance = editHistoryPerformance;
 window.selectWorkout = selectWorkout;
+window.exportHistoryToExcel = exportHistoryToExcel;
