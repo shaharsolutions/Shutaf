@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { initializeFirestore, persistentLocalCache, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, collection, addDoc, query, orderBy, getDocs, limit, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, getDoc, updateDoc, arrayUnion, arrayRemove, onSnapshot, collection, addDoc, query, orderBy, getDocs, limit, where, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -15,9 +15,9 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore with persistent cache for Task 2
+// Initialize Firestore with multi-tab persistent cache
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache()
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 export const auth = getAuth(app);

@@ -1,9 +1,10 @@
-const CACHE_NAME = 'shutaf-cache-v9';
+const CACHE_NAME = 'shutaf-cache-v10';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/firebase-config.js',
   '/icon-512.png',
   '/manifest.json'
 ];
