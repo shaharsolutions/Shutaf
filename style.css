@@ -677,16 +677,17 @@ footer a:hover {
     bottom: 30px;
     left: 50%;
     transform: translateX(-50%);
-    width: 90%;
-    max-width: 450px;
+    width: 95%;
+    max-width: 480px;
     z-index: 2000;
     background: var(--accent-gradient);
     color: #0f172a;
-    padding: 12px 20px;
+    padding: 12px 24px;
     border-radius: var(--radius-lg);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.3);
     animation: slideInUpTimer 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     backdrop-filter: blur(12px);
@@ -716,8 +717,9 @@ footer a:hover {
 .mini-timer-info {
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 12px;
     font-weight: 700;
+    flex-shrink: 0;
 }
 
 .timer-label {
@@ -725,6 +727,7 @@ footer a:hover {
     text-transform: uppercase;
     letter-spacing: 1px;
     opacity: 0.8;
+    min-width: 50px;
 }
 
 .mini-timer-info i {
@@ -734,20 +737,26 @@ footer a:hover {
 
 .timer-display-container {
     background: rgba(15, 23, 42, 0.15);
-    padding: 6px 16px;
+    padding: 6px 12px;
     border-radius: 12px;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 100px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 #mini-timer-display {
     font-size: 26px;
     font-family: 'Outfit', sans-serif;
-    letter-spacing: 1.5px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
     font-weight: 800;
     color: #0f172a;
     transition: all 0.3s ease;
+    line-height: 1;
 }
 
 .over-target {
@@ -768,15 +777,16 @@ footer a:hover {
 
 .mini-timer-actions {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 15px;
 }
 
 .mini-btn {
     background: rgba(15, 23, 42, 0.15);
     border: 1px solid rgba(15, 23, 42, 0.1);
     color: #0f172a;
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -785,6 +795,7 @@ footer a:hover {
     font-weight: 700;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     font-size: 16px;
+    flex-shrink: 0;
 }
 
 .mini-btn:hover {
@@ -795,6 +806,13 @@ footer a:hover {
 
 .mini-btn:active {
     transform: scale(0.9);
+}
+
+.timer-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(15, 23, 42, 0.1);
+    margin: 0 5px;
 }
 
 .close-mini {
@@ -1199,7 +1217,42 @@ footer a:hover {
 
     .mini-timer-bar {
         bottom: 85px; /* Stay above the bottom navigation */
-        width: calc(100% - 20px);
+        width: calc(100% - 16px);
+        padding: 8px 12px;
+        gap: 10px;
+        border-radius: 16px;
+    }
+
+    .mini-timer-info {
+        gap: 8px;
+    }
+
+    .timer-label {
+        display: none; /* Hide 'מנוחה' text on small screens */
+    }
+
+    .timer-display-container {
+        min-width: 85px;
+        padding: 4px 8px;
+    }
+
+    #mini-timer-display {
+        font-size: 22px;
+    }
+
+    .mini-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .mini-timer-actions {
+        gap: 8px;
+    }
+
+    .timer-separator {
+        margin: 0 2px;
+        height: 20px;
     }
 }
 
