@@ -204,24 +204,6 @@
 
             <!-- Activity Tab -->
             <section id="activity-tab" class="tab-content">
-                <!-- Timer Bar (Primary display) -->
-                <div id="mini-timer" class="mini-timer-bar" style="display: none;">
-                    <div class="mini-timer-info">
-                        <i class="fa-solid fa-clock"></i>
-                        <span>זמן מנוחה:</span>
-                        <span id="mini-timer-display">01:30</span>
-                    </div>
-                    <div class="mini-timer-actions">
-                        <button class="mini-btn" onclick="adjustTimer(-10)" title="-10s">-</button>
-                        <button class="mini-btn" onclick="toggleTimer()" id="mini-timer-toggle" title="עצור/המשך">
-                            <i class="fa-solid fa-pause"></i>
-                        </button>
-                        <button class="mini-btn" onclick="adjustTimer(10)" title="+10s">+</button>
-                        <button class="mini-btn close-mini" onclick="closeTimer()" title="סגור">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-                </div>
 
                 <div class="glass-card">
                     <h1 class="section-title"><i class="fa-solid fa-play"></i> מעקב אימון פעיל</h1>
@@ -274,7 +256,7 @@
 
         <!-- Footer -->
         <footer>
-            <p>&copy; נבנה על-ידי <a href="https://shaharsolutions.github.io/shahardigitalsolutions/" target="_blank" rel="noopener">שחר פתרונות דיגיטליים</a></p>
+            <p>&copy; נבנה על-ידי <a href="https://shaharsolutions.github.io/digital/" target="_blank" rel="noopener">שחר פתרונות דיגיטליים</a></p>
         </footer>
     </div>
 
@@ -285,6 +267,28 @@
             <div class="modal-actions" id="modal-buttons">
                 <!-- Buttons will be inserted here via JS -->
             </div>
+        </div>
+    </div>
+
+    <!-- Global Mini Timer -->
+    <div id="mini-timer" class="mini-timer-bar" style="display: none;">
+        <div class="mini-timer-info">
+            <i class="fa-solid fa-clock"></i>
+            <span class="timer-label">מנוחה</span>
+            <div class="timer-display-container">
+                <span id="mini-timer-display">00:00</span>
+            </div>
+        </div>
+        <div class="mini-timer-actions">
+            <button class="mini-btn" onclick="adjustTimer(10)" title="+10s">+</button>
+            <button class="mini-btn" onclick="toggleTimer()" id="mini-timer-toggle" title="עצור/המשך">
+                <i class="fa-solid fa-pause"></i>
+            </button>
+            <button class="mini-btn" onclick="adjustTimer(-10)" title="-10s">-</button>
+            <div style="width: 1px; height: 24px; background: rgba(15, 23, 42, 0.1); margin: 0 5px;"></div>
+            <button class="mini-btn close-mini" onclick="closeTimer()" title="סגור">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     </div>
 

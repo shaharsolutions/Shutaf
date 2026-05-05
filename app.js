@@ -176,13 +176,16 @@ const elements = {
     workoutEditorCard: null,
     workoutNameInput: null,
     editorTitle: null,
-    durationDisplay: null
+    durationDisplay: null,
+    miniTimerTarget: null,
+    timerDisplayContainer: null
 };
 
 let timerInterval = null;
 let workoutDurationInterval = null;
-let timerTargetTimestamp = null; // Task 3: Reliable Timer target
-let timeLeft = 90;
+let timerStartTimestamp = null; 
+let timerElapsedSeconds = 0;
+let timerTargetSeconds = 90;
 let isTimerRunning = false;
 
 // Initialize App
@@ -212,6 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.editorTitle = document.getElementById('editor-title');
     elements.miniTimer = document.getElementById('mini-timer');
     elements.miniTimerDisplay = document.getElementById('mini-timer-display');
+    elements.miniTimerTarget = document.getElementById('mini-timer-target');
+    elements.timerDisplayContainer = document.querySelector('.timer-display-container');
     elements.durationBar = document.getElementById('workout-duration-bar');
     elements.durationDisplay = document.getElementById('workout-duration-display');
 
@@ -1379,10 +1384,12 @@ function toggleSetComplete(exerciseId, setIndex, element, originalReps) {
 }
 
 // Timer Logic - Task 3: Mobile-Reliable Timers
+// Timer Logic - Count Up
 function startTimer(seconds = 90) {
     clearInterval(timerInterval);
-    timeLeft = seconds;
-    timerTargetTimestamp = Date.now() + (seconds * 1000);
+    timerTargetSeconds = seconds;
+    timerStartTimestamp = Date.now();
+    timerElapsedSeconds = 0;
     isTimerRunning = true;
     
     // Show mini timer
@@ -1391,27 +1398,36 @@ function startTimer(seconds = 90) {
     updateTimerDisplay();
     updateTimerToggleIcon();
     
-    // Task 3: Use setInterval ONLY to update UI based on target timestamp
     timerInterval = setInterval(() => {
-        const remaining = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
-        timeLeft = remaining;
+        timerElapsedSeconds = Math.floor((Date.now() - timerStartTimestamp) / 1000);
         updateTimerDisplay();
         
-        if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            isTimerRunning = false;
-            updateTimerToggleIcon();
+        // Visual indicator when target reached
+        if (timerElapsedSeconds === timerTargetSeconds) {
             flashTimerDisplay();
+            if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
         }
-    }, 200); // More frequent updates for smoother UI
+    }, 200);
 }
 
 function updateTimerDisplay() {
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // Format elapsed time
+    const elMinutes = Math.floor(timerElapsedSeconds / 60);
+    const elSeconds = timerElapsedSeconds % 60;
+    const elTimeStr = `${elMinutes.toString().padStart(2, '0')}:${elSeconds.toString().padStart(2, '0')}`;
     
-    if (elements.miniTimerDisplay) elements.miniTimerDisplay.innerText = timeStr;
+    if (elements.miniTimerDisplay) {
+        elements.miniTimerDisplay.innerText = elTimeStr;
+        
+        // Highlight if over target
+        if (timerElapsedSeconds >= timerTargetSeconds) {
+            elements.miniTimerDisplay.classList.add('over-target');
+            if (elements.timerDisplayContainer) elements.timerDisplayContainer.classList.add('over-target-bg');
+        } else {
+            elements.miniTimerDisplay.classList.remove('over-target');
+            if (elements.timerDisplayContainer) elements.timerDisplayContainer.classList.remove('over-target-bg');
+        }
+    }
 }
 
 function updateTimerToggleIcon() {
@@ -1427,22 +1443,18 @@ function toggleTimer() {
     if (isTimerRunning) {
         clearInterval(timerInterval);
         isTimerRunning = false;
-        // Task 3: Save remaining time if paused
-        timeLeft = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
     } else {
-        if (timeLeft <= 0) timeLeft = restTime || 90;
         isTimerRunning = true;
-        timerTargetTimestamp = Date.now() + (timeLeft * 1000);
+        // Adjust start timestamp to account for already elapsed time
+        timerStartTimestamp = Date.now() - (timerElapsedSeconds * 1000);
         
         timerInterval = setInterval(() => {
-            const remaining = Math.max(0, Math.ceil((timerTargetTimestamp - Date.now()) / 1000));
-            timeLeft = remaining;
+            timerElapsedSeconds = Math.floor((Date.now() - timerStartTimestamp) / 1000);
             updateTimerDisplay();
-            if (timeLeft <= 0) {
-                clearInterval(timerInterval);
-                isTimerRunning = false;
-                updateTimerToggleIcon();
+            
+            if (timerElapsedSeconds === timerTargetSeconds) {
                 flashTimerDisplay();
+                if (window.navigator.vibrate) window.navigator.vibrate([200, 100, 200]);
             }
         }, 200);
     }
@@ -1450,13 +1462,8 @@ function toggleTimer() {
 }
 
 function adjustTimer(amount) {
-    timeLeft += amount;
-    if (timeLeft < 0) timeLeft = 0;
-    
-    // Task 3: Update target timestamp if running
-    if (isTimerRunning) {
-        timerTargetTimestamp = Date.now() + (timeLeft * 1000);
-    }
+    timerTargetSeconds += amount;
+    if (timerTargetSeconds < 0) timerTargetSeconds = 0;
     updateTimerDisplay();
 }
 
@@ -1468,12 +1475,12 @@ function closeTimer() {
 
 function flashTimerDisplay() {
     const miniDisplay = document.getElementById('mini-timer-display');
-    
-    if (miniDisplay) miniDisplay.style.animation = 'pulse 0.5s infinite alternate';
-    
-    setTimeout(() => {
-        if (miniDisplay) miniDisplay.style.animation = '';
-    }, 5000);
+    if (miniDisplay) {
+        miniDisplay.classList.add('timer-complete-flash');
+        setTimeout(() => {
+            miniDisplay.classList.remove('timer-complete-flash');
+        }, 5000);
+    }
 }
 
 async function finishWorkout() {
@@ -1498,7 +1505,7 @@ async function finishWorkout() {
     const historyEntry = {
         planId: activeWorkoutId,
         timestamp: Date.now(), // Task 1: Added for better sorting in subcollections
-        date: new Date().toLocaleString('he-IL'),
+        date: new Date().toLocaleString('he-IL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
         workoutName: activePlan.name,
         workout: JSON.parse(JSON.stringify(activePlan.exercises)),
         state: activeWorkoutState,
@@ -1597,6 +1604,12 @@ async function renderHistory() {
         
         const fragment = document.createDocumentFragment();
         history.forEach(entry => {
+            // Remove seconds from date string for display (e.g., "DD.MM.YYYY, HH:mm:ss" -> "DD.MM.YYYY, HH:mm")
+            let displayDate = entry.date || '';
+            if (displayDate.split(':').length > 2) {
+                displayDate = displayDate.substring(0, displayDate.lastIndexOf(':'));
+            }
+
             const card = document.createElement('div');
             card.className = 'glass-card history-item';
             card.style.marginBottom = '15px';
@@ -1644,7 +1657,7 @@ async function renderHistory() {
                     <div style="text-align: right;">
                         <div style="font-weight: 600; font-size: 16px; color: var(--accent-color); display: flex; align-items: center; gap: 8px;">
                             <i class="fa-solid fa-calendar-day"></i> 
-                            <span>${entry.date}</span>
+                            <span>${displayDate}</span>
                             <button class="edit-btn" onclick="editHistoryDate('${entry.id}')" style="font-size: 12px; opacity: 0.7; padding: 2px 5px;" title="ערוך תאריך">
                                 <i class="fa-solid fa-pen"></i>
                             </button>
@@ -1714,7 +1727,11 @@ async function exportHistoryToExcel() {
 
         querySnapshot.forEach((doc) => {
             const entry = doc.data();
-            const date = entry.date || '';
+            let date = entry.date || '';
+            // Remove seconds if present
+            if (date.split(':').length > 2) {
+                date = date.substring(0, date.lastIndexOf(':'));
+            }
             const workoutName = entry.workoutName || 'אימון';
             const duration = entry.duration || '';
 
@@ -1850,7 +1867,7 @@ async function editHistoryDate(id) {
         const newDateVal = document.getElementById('edit-date-input').value;
         if (newDateVal) {
             const newDate = new Date(newDateVal);
-            entry.date = newDate.toLocaleString('he-IL');
+            entry.date = newDate.toLocaleString('he-IL', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
             
             // Optionally sort history by date string? 
             // Better to sort by actual date objects.

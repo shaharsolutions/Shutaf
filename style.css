@@ -671,19 +671,41 @@ footer a:hover {
     animation: pulse 2s infinite;
 }
 
-/* Mini Timer Bar */
+/* Mini Timer Bar - Fixed & Floating */
 .mini-timer-bar {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 450px;
+    z-index: 2000;
     background: var(--accent-gradient);
     color: #0f172a;
-    padding: 10px 20px;
-    border-radius: var(--radius-md);
+    padding: 12px 20px;
+    border-radius: var(--radius-lg);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
-    cursor: pointer;
-    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
-    animation: slideInDown 0.3s ease-out;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(56, 189, 248, 0.3);
+    animation: slideInUpTimer 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.timer-complete-flash {
+    animation: pulseRed 0.8s infinite alternate !important;
+}
+
+@keyframes pulseRed {
+    from { color: #0f172a; }
+    to { color: #ef4444; }
+}
+
+@keyframes slideInUpTimer {
+    from { transform: translate(-50%, 100px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
 }
 
 @keyframes slideInDown {
@@ -694,58 +716,96 @@ footer a:hover {
 .mini-timer-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
     font-weight: 700;
 }
 
+.timer-label {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.mini-timer-info i {
+    font-size: 20px;
+    filter: drop-shadow(0 0 5px rgba(15, 23, 42, 0.3));
+}
+
+.timer-display-container {
+    background: rgba(15, 23, 42, 0.15);
+    padding: 6px 16px;
+    border-radius: 12px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 #mini-timer-display {
-    font-size: 18px;
-    background: rgba(15, 23, 42, 0.2);
-    padding: 2px 8px;
-    border-radius: 4px;
+    font-size: 26px;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: 1.5px;
+    font-weight: 800;
+    color: #0f172a;
+    transition: all 0.3s ease;
+}
+
+.over-target {
+    color: #ef4444 !important;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.over-target-bg {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    animation: softPulse 1.5s infinite alternate;
+}
+
+@keyframes softPulse {
+    from { transform: scale(1); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 5px rgba(239, 68, 68, 0.2); }
+    to { transform: scale(1.05); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 15px rgba(239, 68, 68, 0.4); }
 }
 
 .mini-timer-actions {
     display: flex;
-    gap: 8px;
+    gap: 10px;
 }
 
 .mini-btn {
     background: rgba(15, 23, 42, 0.15);
     border: 1px solid rgba(15, 23, 42, 0.1);
     color: #0f172a;
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     font-weight: 700;
-    transition: var(--transition);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 16px;
 }
 
 .mini-btn:hover {
     background: rgba(15, 23, 42, 0.3);
-    transform: scale(1.1);
+    transform: scale(1.15) rotate(5deg);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
-.expand-btn {
-    background: rgba(15, 23, 42, 0.1);
-    border: 1px solid rgba(15, 23, 42, 0.2);
-    color: #0f172a;
-    padding: 5px 12px;
-    border-radius: var(--radius-sm);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 5px;
+.mini-btn:active {
+    transform: scale(0.9);
 }
 
-.expand-btn:hover {
-    background: rgba(15, 23, 42, 0.2);
+.close-mini {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.close-mini:hover {
+    background: #ef4444 !important;
+    color: white !important;
 }
 
 .timer-controls {
@@ -1135,6 +1195,11 @@ footer a:hover {
     
     footer {
         display: none;
+    }
+
+    .mini-timer-bar {
+        bottom: 85px; /* Stay above the bottom navigation */
+        width: calc(100% - 20px);
     }
 }
 
