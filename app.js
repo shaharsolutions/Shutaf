@@ -40,6 +40,7 @@ let userRole = 'none'; // 'admin', 'coach', 'trainee', or 'none'
 let managedTraineeId = null; // If coach is viewing a trainee
 let managedTraineeData = null;
 let allCoaches = []; // For admin to assign coaches
+let allUsers = []; // For admin to list and filter users
 let adminSelectedUserId = null; // For admin search result
 
 
@@ -444,8 +445,9 @@ window.adjustTimer = adjustTimer;
 window.closeTimer = closeTimer;
 window.finishWorkout = finishWorkout;
 window.stopWorkout = stopWorkout;
-window.adminSearchUser = adminSearchUser;
 window.adminUpdateUser = adminUpdateUser;
+window.adminFilterUsers = adminFilterUsers;
+window.adminSelectUser = adminSelectUser;
 window.toggleAdminCoachSelect = toggleAdminCoachSelect;
 window.switchTraineeSubTab = switchTraineeSubTab;
 window.closeTraineeManagement = closeTraineeManagement;
@@ -453,27 +455,22 @@ window.closeTraineeManagement = closeTraineeManagement;
 async function checkUserRole(user) {
     if (!user) return;
     
-    // Hardcoded Admin for now - can be moved to Firestore later
     const ADMIN_EMAIL = 'shaharsolutions@gmail.com';
     
     try {
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         
-        if (userSnap.exists()) {
-            const data = userSnap.data();
-            userRole = data.role || 'none';
-            
-            // If email is admin email, force admin role
-            if (user.email === ADMIN_EMAIL) {
-                userRole = 'admin';
-            }
+        if (user.email === ADMIN_EMAIL) {
+            userRole = 'admin';
+            // Always ensure admin has the role in Firestore for security rules to work
+            setDoc(userRef, { email: user.email, role: 'admin' }, { merge: true })
+                .then(() => console.log("Admin role synced to Firestore successfully."))
+                .catch(e => console.error("Error syncing admin role to Firestore:", e));
+        } else if (userSnap.exists()) {
+            userRole = userSnap.data().role || 'none';
         } else {
-            // New user, if admin email, set role in DB
-            if (user.email === ADMIN_EMAIL) {
-                userRole = 'admin';
-                await setDoc(userRef, { email: user.email, role: 'admin' }, { merge: true });
-            }
+            userRole = 'none';
         }
         
         updateTabsByRole();
@@ -548,6 +545,7 @@ function switchTab(tabId) {
     } else if (tabId === 'coach') {
         loadTrainees();
     } else if (tabId === 'admin') {
+        adminLoadAllUsers();
         loadAllCoaches();
     }
 }
@@ -1276,12 +1274,7 @@ function saveWorkoutPlan() {
     saveAllPlans();
     
     if (selectedWorkoutId) {
-        customAlert('השינויים נשמרו בהצלחה!', () => {
-            // Option to start this workout
-            customConfirm('האם ברצונך להתחיל את האימון הזה עכשיו?', () => {
-                startWorkout(selectedWorkoutId);
-            });
-        });
+        customAlert('השינויים נשמרו בהצלחה!');
     }
 }
 
@@ -1315,16 +1308,15 @@ async function loadPlanFromStorage(uid) {
         userUnsubscribe = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                console.log("Data synced from Firebase");
+                console.log("Data synced from Firebase (UID: " + uid + ")");
                 
                 let needsReRender = false;
 
                 // Sync plans
-                if (data.workoutPlans) {
-                    if (JSON.stringify(workoutPlans) !== JSON.stringify(data.workoutPlans)) {
-                        workoutPlans = data.workoutPlans;
-                        needsReRender = true;
-                    }
+                const newPlans = data.workoutPlans || [];
+                if (JSON.stringify(workoutPlans) !== JSON.stringify(newPlans)) {
+                    workoutPlans = newPlans;
+                    needsReRender = true;
                 }
                 
                 // Sync rest time
@@ -1339,6 +1331,7 @@ async function loadPlanFromStorage(uid) {
                     renderWorkoutsList();
                     renderCurrentPlan();
                     renderActiveWorkout();
+                    if (managedTraineeId) renderTraineePlans();
                 }
             }
         }, (error) => {
@@ -1659,8 +1652,10 @@ function stopWorkout() {
 // Task 1: Save history entry to subcollection
 async function saveHistoryEntryToFirebase(entry) {
     try {
-        if (!currentUser) return;
-        const historyRef = collection(db, "users", currentUser.uid, "history");
+        const targetUid = managedTraineeId || (currentUser ? currentUser.uid : null);
+        if (!targetUid) return;
+        
+        const historyRef = collection(db, "users", targetUid, "history");
         await addDoc(historyRef, entry);
         console.log("Workout entry saved to Firestore subcollection");
     } catch (e) {
@@ -2514,10 +2509,18 @@ async function loadAllCoaches() {
 async function adminUpdateUser() {
     if (!adminSelectedUserId) return;
     
+    if (adminSelectedUserId === currentUser.uid) {
+        customAlert("אינך יכול לשנות את התפקיד של עצמך דרך ממשק הניהול כדי למנוע נעילה מחוץ למערכת.");
+        return;
+    }
+    
     const role = document.getElementById('admin-role-select').value;
     const coachId = document.getElementById('admin-coach-select').value;
     
     try {
+        console.log(`Admin: Updating user ${adminSelectedUserId} to role ${role} (Coach: ${coachId})`);
+        console.log(`Current Admin UID: ${currentUser.uid}`);
+        
         const userRef = doc(db, "users", adminSelectedUserId);
         const updateData = { role: role };
         if (role === 'trainee') {
@@ -2528,10 +2531,112 @@ async function adminUpdateUser() {
         
         await updateDoc(userRef, updateData);
         customAlert("המשתמש עודכן בהצלחה.");
+        
+        // Refresh local list and re-render
+        const userIdx = allUsers.findIndex(u => u.id === adminSelectedUserId);
+        if (userIdx !== -1) {
+            allUsers[userIdx].role = role;
+            allUsers[userIdx].coachId = role === 'trainee' ? coachId : null;
+        }
+        adminRenderUsersList(document.getElementById('admin-user-search').value);
     } catch (e) {
         console.error("Error updating user:", e);
         customAlert("שגיאה בעדכון המשתמש.");
     }
+}
+
+async function adminLoadAllUsers() {
+    const listContainer = document.getElementById('admin-users-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען משתמשים...</div>';
+    
+    try {
+        console.log("Admin: Fetching all users...");
+        const usersRef = collection(db, "users");
+        const querySnapshot = await getDocs(usersRef);
+        
+        console.log(`Admin: Found ${querySnapshot.size} user documents.`);
+        
+        allUsers = [];
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            allUsers.push({ id: doc.id, ...data });
+        });
+        
+        adminRenderUsersList();
+    } catch (e) {
+        console.error("Error loading all users:", e);
+        if (e.code === 'permission-denied') {
+            listContainer.innerHTML = '<div class="empty-state"><p style="color: var(--error-color);">שגיאת הרשאות: וודא שעדכנת את ה-Rules ב-Firebase Console.</p></div>';
+        } else {
+            listContainer.innerHTML = '<div class="empty-state"><p>שגיאה בטעינת משתמשים: ' + e.message + '</p></div>';
+        }
+    }
+}
+
+function adminRenderUsersList(filterText = "") {
+    const listContainer = document.getElementById('admin-users-list');
+    if (!listContainer) return;
+    
+    const filtered = allUsers.filter(user => {
+        const email = (user.email || "").toLowerCase();
+        return email.includes(filterText.toLowerCase());
+    });
+    
+    if (filtered.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>לא נמצאו משתמשים.</p></div>';
+        return;
+    }
+    
+    listContainer.innerHTML = '';
+    filtered.forEach(user => {
+        const item = document.createElement('div');
+        item.className = 'exercise-item';
+        item.style.cursor = 'pointer';
+        item.style.marginBottom = '8px';
+        
+        item.innerHTML = `
+            <div class="exercise-info">
+                <h3>${user.email || "ללא אימייל"}</h3>
+                <p>תפקיד: ${translateRole(user.role)}</p>
+            </div>
+            <i class="fa-solid fa-chevron-left" style="color: var(--accent-color);"></i>
+        `;
+        
+        item.onclick = () => adminSelectUser(user.id, user.email, user.role, user.coachId);
+        listContainer.appendChild(item);
+    });
+}
+
+function translateRole(role) {
+    if (role === 'admin') return 'מנהל';
+    if (role === 'coach') return 'מאמן';
+    if (role === 'trainee') return 'מתאמן';
+    return 'ללא';
+}
+
+function adminFilterUsers() {
+    const filterText = document.getElementById('admin-user-search').value;
+    adminRenderUsersList(filterText);
+}
+
+async function adminSelectUser(uid, email, role, coachId) {
+    adminSelectedUserId = uid;
+    
+    document.getElementById('admin-result-email').innerText = email || "ללא אימייל";
+    document.getElementById('admin-role-select').value = role || 'none';
+    
+    if (role === 'trainee') {
+        document.getElementById('admin-coach-assignment').style.display = 'block';
+        await loadAllCoaches();
+        document.getElementById('admin-coach-select').value = coachId || '';
+    } else {
+        document.getElementById('admin-coach-assignment').style.display = 'none';
+    }
+    
+    document.getElementById('admin-user-result').style.display = 'block';
+    document.getElementById('admin-user-result').scrollIntoView({ behavior: 'smooth' });
 }
 
 // --- Coach Functions ---
@@ -2576,6 +2681,14 @@ async function viewTrainee(id, email) {
     document.getElementById('managed-trainee-name').innerText = `ניהול מתאמן: ${email}`;
     document.getElementById('trainee-management-container').style.display = 'block';
     
+    // Clear current plans to show loading state
+    workoutPlans = [];
+    document.getElementById('trainee-plans-view').innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען תכניות...</div>';
+    
+    // Switch listener to trainee's data
+    if (userUnsubscribe) userUnsubscribe();
+    loadPlanFromStorage(id);
+    
     switchTraineeSubTab('plans');
 }
 
@@ -2584,7 +2697,8 @@ function closeTraineeManagement() {
     managedTraineeData = null;
     document.getElementById('trainee-management-container').style.display = 'none';
     
-    // Reset to coach's own data (though coach doesn't really have plans in this view usually)
+    // Switch listener back to coach's own data
+    if (userUnsubscribe) userUnsubscribe();
     loadPlanFromStorage(currentUser.uid);
 }
 
@@ -2609,86 +2723,48 @@ async function switchTraineeSubTab(subTab) {
     }
 }
 
-async function renderTraineePlans() {
+function renderTraineePlans() {
     const container = document.getElementById('trainee-plans-view');
-    container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען...</div>';
+    if (!container) return;
     
-    try {
-        const userRef = doc(db, "users", managedTraineeId);
-        const userSnap = await getDoc(userRef);
-        
-        if (userSnap.exists()) {
-            const data = userSnap.data();
-            const traineePlans = data.workoutPlans || [];
-            
-            if (traineePlans.length === 0) {
-                container.innerHTML = '<div class="empty-state"><p>למתאמן אין תכניות אימון.</p></div>';
-            } else {
-                container.innerHTML = '<h3>תכניות אימון:</h3>';
-                traineePlans.forEach(plan => {
-                    const div = document.createElement('div');
-                    div.className = 'exercise-item';
-                    div.style.marginBottom = '10px';
-                    div.innerHTML = `
-                        <div class="exercise-info">
-                            <h4>${plan.name}</h4>
-                            <p>${plan.exercises.length} תרגילים</p>
-                        </div>
-                        <button class="btn btn-secondary" onclick="editTraineePlan('${plan.id}')" style="width: auto;">ערוך</button>
-                    `;
-                    container.appendChild(div);
-                });
-            }
-            
-            const addBtn = document.createElement('button');
-            addBtn.className = 'btn btn-primary';
-            addBtn.style.marginTop = '15px';
-            addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> הוסף תכנית חדשה למתאמן';
-            addBtn.onclick = () => createNewTraineePlan();
-            container.appendChild(addBtn);
-        }
-    } catch (e) {
-        console.error("Error rendering trainee plans:", e);
+    if (!workoutPlans || workoutPlans.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>למתאמן אין תכניות אימון.</p></div>';
+    } else {
+        container.innerHTML = '<h3>תכניות אימון:</h3>';
+        workoutPlans.forEach(plan => {
+            const div = document.createElement('div');
+            div.className = 'exercise-item';
+            div.style.marginBottom = '10px';
+            div.innerHTML = `
+                <div class="exercise-info">
+                    <h4>${plan.name}</h4>
+                    <p>${plan.exercises.length} תרגילים</p>
+                </div>
+                <button class="btn btn-secondary" onclick="editTraineePlan('${plan.id}')" style="width: auto;">ערוך</button>
+            `;
+            container.appendChild(div);
+        });
     }
+    
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn btn-primary';
+    addBtn.style.marginTop = '15px';
+    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> הוסף תכנית חדשה למתאמן';
+    addBtn.onclick = () => createNewTraineePlan();
+    container.appendChild(addBtn);
 }
 
 window.viewTrainee = viewTrainee;
-window.editTraineePlan = async function(planId) {
-    try {
-        const userRef = doc(db, "users", managedTraineeId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-            const data = userSnap.data();
-            workoutPlans = data.workoutPlans || [];
-            restTime = data.restTime || 90;
-            
-            switchTab('setup');
-            selectWorkout(planId);
-            
-            customAlert(`אתה עורך כעת את התכנית של המתאמן. כל שינוי יישמר עבורו.`);
-        }
-    } catch (e) {
-        console.error(e);
-    }
+window.editTraineePlan = function(planId) {
+    switchTab('setup');
+    selectWorkout(planId);
+    customAlert(`אתה עורך כעת את התכנית של המתאמן. כל שינוי יישמר עבורו.`);
 };
 
-window.createNewTraineePlan = async function() {
-    try {
-        const userRef = doc(db, "users", managedTraineeId);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-            const data = userSnap.data();
-            workoutPlans = data.workoutPlans || [];
-            restTime = data.restTime || 90;
-            
-            createNewWorkout();
-            switchTab('setup');
-            
-            customAlert(`נוצרה תכנית חדשה עבור המתאמן.`);
-        }
-    } catch (e) {
-        console.error(e);
-    }
+window.createNewTraineePlan = function() {
+    createNewWorkout();
+    switchTab('setup');
+    customAlert(`נוצרה תכנית חדשה עבור המתאמן.`);
 };
 
 async function renderTraineeHistory() {
