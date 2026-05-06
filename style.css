@@ -262,6 +262,33 @@ input:focus {
     box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
+/* Password Visibility Toggle */
+.password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.password-wrapper input {
+    padding-left: 45px; /* Space for the icon on the left in RTL */
+}
+
+.password-toggle {
+    position: absolute;
+    left: 15px; /* Positioned on the left in RTL */
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    padding: 5px;
+    z-index: 5;
+    font-size: 18px;
+}
+
+.password-toggle:hover {
+    color: var(--accent-color);
+}
+
 /* Custom Checkbox Styling */
 .checkbox-container input[type="checkbox"] {
     appearance: none;
@@ -1297,4 +1324,34 @@ footer a:hover {
 .exercise-item[draggable="true"] {
     user-select: none;
     -webkit-user-drag: element;
+}
+
+/* Admin & Coach Tabs */
+#admin-role-select, #admin-coach-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 12px center;
+    background-size: 16px;
+    padding-left: 40px;
+}
+
+#admin-user-result {
+    animation: slideInDown 0.3s ease-out;
+}
+
+#trainee-management-container {
+    animation: fadeIn 0.4s ease-out;
+}
+
+.trainee-sub-tab-active {
+    background: var(--accent-gradient) !important;
+    color: white !important;
+}
+
+#trainee-plans-view h3, #trainee-history-view h3 {
+    margin: 20px 0 15px 0;
+    font-size: 18px;
+    color: var(--text-secondary);
 }

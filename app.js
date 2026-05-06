@@ -36,6 +36,11 @@ let editingExerciseId = null; // Tracks which exercise is being edited
 let currentUser = null;
 let authMode = 'login'; // 'login' or 'signup'
 let userUnsubscribe = null; // To clean up Firestore listeners
+let userRole = 'none'; // 'admin', 'coach', 'trainee', or 'none'
+let managedTraineeId = null; // If coach is viewing a trainee
+let managedTraineeData = null;
+let allCoaches = []; // For admin to assign coaches
+let adminSelectedUserId = null; // For admin search result
 
 
 // PWA Installation
@@ -178,7 +183,9 @@ const elements = {
     editorTitle: null,
     durationDisplay: null,
     miniTimerTarget: null,
-    timerDisplayContainer: null
+    timerDisplayContainer: null,
+    confirmPasswordGroup: null,
+    confirmPasswordInput: null
 };
 
 let timerInterval = null;
@@ -219,6 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.timerDisplayContainer = document.querySelector('.timer-display-container');
     elements.durationBar = document.getElementById('workout-duration-bar');
     elements.durationDisplay = document.getElementById('workout-duration-display');
+    elements.confirmPasswordGroup = document.getElementById('confirm-password-group');
+    elements.confirmPasswordInput = document.getElementById('auth-confirm-password');
 
     // Auth Event Listeners
     const authToggleText = document.getElementById('auth-toggle-text');
@@ -243,12 +252,18 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('auth-tab').classList.remove('active');
             document.getElementById('setup-tab').classList.add('active');
             document.getElementById('logout-btn').style.display = 'inline-flex';
+            document.getElementById('nav-links').style.display = 'flex';
             
             // Sync UI state
             switchTab('setup');
             
-            // Load user data from Firebase
+            // Save email to Firestore so admin can search by email
+            setDoc(doc(db, "users", user.uid), { email: user.email }, { merge: true })
+                .catch(e => console.error("Error saving email:", e));
+            
+            // Load user data and check roles
             loadPlanFromStorage(user.uid);
+            checkUserRole(user);
         } else {
             if (userUnsubscribe) {
                 userUnsubscribe();
@@ -260,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('activity-tab').classList.remove('active');
             document.getElementById('history-tab').classList.remove('active');
             document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('nav-links').style.display = 'none';
             
             // Clear local data
             workoutPlans = [];
@@ -297,11 +313,15 @@ function toggleAuthMode() {
         title.innerHTML = '<i class="fa-solid fa-user-plus"></i> הרשמה';
         submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> הרשם';
         toggleText.innerHTML = 'כבר יש לך חשבון? <span style="color: var(--accent-color); font-weight: 600;">התחבר כאן</span>';
+        if (elements.confirmPasswordGroup) elements.confirmPasswordGroup.style.display = 'block';
+        if (elements.confirmPasswordInput) elements.confirmPasswordInput.required = true;
     } else {
         authMode = 'login';
         title.innerHTML = '<i class="fa-solid fa-user-lock"></i> התחברות';
         submitBtn.innerHTML = '<i class="fa-solid fa-sign-in-alt"></i> התחבר';
         toggleText.innerHTML = 'אין לך חשבון? <span style="color: var(--accent-color); font-weight: 600;">הרשם עכשיו</span>';
+        if (elements.confirmPasswordGroup) elements.confirmPasswordGroup.style.display = 'none';
+        if (elements.confirmPasswordInput) elements.confirmPasswordInput.required = false;
     }
 }
 
@@ -310,6 +330,14 @@ async function handleAuth() {
     const password = document.getElementById('auth-password').value;
     const submitBtn = document.getElementById('auth-submit-btn');
     
+    if (authMode === 'signup') {
+        const confirmPassword = elements.confirmPasswordInput.value;
+        if (password !== confirmPassword) {
+            customAlert('הסיסמאות אינן תואמות. אנא נסה שוב.');
+            return;
+        }
+    }
+
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> מעבד...';
     
@@ -385,7 +413,23 @@ async function handleLogout() {
     });
 }
 
+function togglePasswordVisibility(inputId, icon) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
+}
+
 // Expose functions to window for HTML event handlers
+window.togglePasswordVisibility = togglePasswordVisibility;
 window.handleAuth = handleAuth;
 window.handleGoogleLogin = handleGoogleLogin;
 window.toggleAuthMode = toggleAuthMode;
@@ -400,12 +444,65 @@ window.adjustTimer = adjustTimer;
 window.closeTimer = closeTimer;
 window.finishWorkout = finishWorkout;
 window.stopWorkout = stopWorkout;
+window.adminSearchUser = adminSearchUser;
+window.adminUpdateUser = adminUpdateUser;
+window.toggleAdminCoachSelect = toggleAdminCoachSelect;
+window.switchTraineeSubTab = switchTraineeSubTab;
+window.closeTraineeManagement = closeTraineeManagement;
 
-async function loadUserData() {
-    if (!currentUser) return;
+async function checkUserRole(user) {
+    if (!user) return;
+    
+    // Hardcoded Admin for now - can be moved to Firestore later
+    const ADMIN_EMAIL = 'shaharsolutions@gmail.com';
     
     try {
-        const userRef = doc(db, "users", currentUser.uid);
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            userRole = data.role || 'none';
+            
+            // If email is admin email, force admin role
+            if (user.email === ADMIN_EMAIL) {
+                userRole = 'admin';
+            }
+        } else {
+            // New user, if admin email, set role in DB
+            if (user.email === ADMIN_EMAIL) {
+                userRole = 'admin';
+                await setDoc(userRef, { email: user.email, role: 'admin' }, { merge: true });
+            }
+        }
+        
+        updateTabsByRole();
+    } catch (e) {
+        console.error("Error checking role:", e);
+    }
+}
+
+function updateTabsByRole() {
+    const adminNav = document.getElementById('nav-admin');
+    const coachNav = document.getElementById('nav-coach');
+    
+    if (userRole === 'admin') {
+        if (adminNav) adminNav.style.display = 'inline-flex';
+        if (coachNav) coachNav.style.display = 'inline-flex';
+    } else if (userRole === 'coach') {
+        if (adminNav) adminNav.style.display = 'none';
+        if (coachNav) coachNav.style.display = 'inline-flex';
+    } else {
+        if (adminNav) adminNav.style.display = 'none';
+        if (coachNav) coachNav.style.display = 'none';
+    }
+}
+
+async function loadUserData(uid) {
+    if (!uid) return;
+    
+    try {
+        const userRef = doc(db, "users", uid);
         const userSnap = await getDoc(userRef);
         
         if (userSnap.exists()) {
@@ -448,6 +545,10 @@ function switchTab(tabId) {
         renderActiveWorkout();
     } else if (tabId === 'history') {
         renderHistory();
+    } else if (tabId === 'coach') {
+        loadTrainees();
+    } else if (tabId === 'admin') {
+        loadAllCoaches();
     }
 }
 
@@ -820,13 +921,15 @@ function formatDuration(ms) {
 async function saveAllPlans() {
     // Task 2: Firebase Persistence handles the "offline" state
     try {
-        if (!currentUser) return;
-        const userRef = doc(db, "users", currentUser.uid);
+        const targetUid = managedTraineeId || (currentUser ? currentUser.uid : null);
+        if (!targetUid) return;
+        
+        const userRef = doc(db, "users", targetUid);
         await setDoc(userRef, { 
             workoutPlans: workoutPlans,
             restTime: restTime
         }, { merge: true });
-        console.log("Plans synced to Firebase");
+        console.log("Plans synced to Firebase (UID: " + targetUid + ")");
     } catch (e) {
         console.error("Error syncing plans to Firebase:", e);
     }
@@ -2339,3 +2442,285 @@ window.editHistoryDate = editHistoryDate;
 window.editHistoryPerformance = editHistoryPerformance;
 window.selectWorkout = selectWorkout;
 window.exportHistoryToExcel = exportHistoryToExcel;
+
+// --- Admin Functions ---
+
+async function adminSearchUser() {
+    const email = document.getElementById('admin-user-search').value.trim();
+    if (!email) return;
+    
+    try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("email", "==", email));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            customAlert("משתמש לא נמצא.");
+            document.getElementById('admin-user-result').style.display = 'none';
+            return;
+        }
+        
+        const userDoc = querySnapshot.docs[0];
+        const userData = userDoc.data();
+        adminSelectedUserId = userDoc.id;
+        
+        document.getElementById('admin-result-email').innerText = email;
+        document.getElementById('admin-role-select').value = userData.role || 'none';
+        
+        if (userData.role === 'trainee') {
+            document.getElementById('admin-coach-assignment').style.display = 'block';
+            await loadAllCoaches();
+            document.getElementById('admin-coach-select').value = userData.coachId || '';
+        } else {
+            document.getElementById('admin-coach-assignment').style.display = 'none';
+        }
+        
+        document.getElementById('admin-user-result').style.display = 'block';
+    } catch (e) {
+        console.error("Error searching user:", e);
+        customAlert("שגיאה בחיפוש משתמש.");
+    }
+}
+
+function toggleAdminCoachSelect() {
+    const role = document.getElementById('admin-role-select').value;
+    document.getElementById('admin-coach-assignment').style.display = role === 'trainee' ? 'block' : 'none';
+    if (role === 'trainee') loadAllCoaches();
+}
+
+async function loadAllCoaches() {
+    try {
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("role", "==", "coach"));
+        const querySnapshot = await getDocs(q);
+        
+        const coachSelect = document.getElementById('admin-coach-select');
+        coachSelect.innerHTML = '<option value="">בחר מאמן...</option>';
+        
+        allCoaches = [];
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            allCoaches.push({ id: doc.id, ...data });
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.innerText = data.email || doc.id;
+            coachSelect.appendChild(option);
+        });
+    } catch (e) {
+        console.error("Error loading coaches:", e);
+    }
+}
+
+async function adminUpdateUser() {
+    if (!adminSelectedUserId) return;
+    
+    const role = document.getElementById('admin-role-select').value;
+    const coachId = document.getElementById('admin-coach-select').value;
+    
+    try {
+        const userRef = doc(db, "users", adminSelectedUserId);
+        const updateData = { role: role };
+        if (role === 'trainee') {
+            updateData.coachId = coachId;
+        } else {
+            updateData.coachId = null;
+        }
+        
+        await updateDoc(userRef, updateData);
+        customAlert("המשתמש עודכן בהצלחה.");
+    } catch (e) {
+        console.error("Error updating user:", e);
+        customAlert("שגיאה בעדכון המשתמש.");
+    }
+}
+
+// --- Coach Functions ---
+
+async function loadTrainees() {
+    if (!currentUser) return;
+    
+    try {
+        const traineesList = document.getElementById('trainees-list');
+        traineesList.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען...</div>';
+        
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, where("coachId", "==", currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            traineesList.innerHTML = '<div class="empty-state"><p>אין מתאמנים משויכים.</p></div>';
+            return;
+        }
+        
+        traineesList.innerHTML = '';
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            const item = document.createElement('div');
+            item.className = 'exercise-item';
+            item.innerHTML = `
+                <div class="exercise-info">
+                    <h3>${data.email}</h3>
+                    <p>מתאמן</p>
+                </div>
+                <button class="btn btn-primary" onclick="viewTrainee('${doc.id}', '${data.email}')" style="width: auto;">נהל</button>
+            `;
+            traineesList.appendChild(item);
+        });
+    } catch (e) {
+        console.error("Error loading trainees:", e);
+    }
+}
+
+async function viewTrainee(id, email) {
+    managedTraineeId = id;
+    document.getElementById('managed-trainee-name').innerText = `ניהול מתאמן: ${email}`;
+    document.getElementById('trainee-management-container').style.display = 'block';
+    
+    switchTraineeSubTab('plans');
+}
+
+function closeTraineeManagement() {
+    managedTraineeId = null;
+    managedTraineeData = null;
+    document.getElementById('trainee-management-container').style.display = 'none';
+    
+    // Reset to coach's own data (though coach doesn't really have plans in this view usually)
+    loadPlanFromStorage(currentUser.uid);
+}
+
+async function switchTraineeSubTab(subTab) {
+    const plansBtn = document.getElementById('trainee-nav-plans');
+    const historyBtn = document.getElementById('trainee-nav-history');
+    const plansView = document.getElementById('trainee-plans-view');
+    const historyView = document.getElementById('trainee-history-view');
+    
+    if (subTab === 'plans') {
+        plansBtn.classList.add('active');
+        historyBtn.classList.remove('active');
+        plansView.style.display = 'block';
+        historyView.style.display = 'none';
+        renderTraineePlans();
+    } else {
+        plansBtn.classList.remove('active');
+        historyBtn.classList.add('active');
+        plansView.style.display = 'none';
+        historyView.style.display = 'block';
+        renderTraineeHistory();
+    }
+}
+
+async function renderTraineePlans() {
+    const container = document.getElementById('trainee-plans-view');
+    container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען...</div>';
+    
+    try {
+        const userRef = doc(db, "users", managedTraineeId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            const traineePlans = data.workoutPlans || [];
+            
+            if (traineePlans.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>למתאמן אין תכניות אימון.</p></div>';
+            } else {
+                container.innerHTML = '<h3>תכניות אימון:</h3>';
+                traineePlans.forEach(plan => {
+                    const div = document.createElement('div');
+                    div.className = 'exercise-item';
+                    div.style.marginBottom = '10px';
+                    div.innerHTML = `
+                        <div class="exercise-info">
+                            <h4>${plan.name}</h4>
+                            <p>${plan.exercises.length} תרגילים</p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="editTraineePlan('${plan.id}')" style="width: auto;">ערוך</button>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+            
+            const addBtn = document.createElement('button');
+            addBtn.className = 'btn btn-primary';
+            addBtn.style.marginTop = '15px';
+            addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> הוסף תכנית חדשה למתאמן';
+            addBtn.onclick = () => createNewTraineePlan();
+            container.appendChild(addBtn);
+        }
+    } catch (e) {
+        console.error("Error rendering trainee plans:", e);
+    }
+}
+
+window.viewTrainee = viewTrainee;
+window.editTraineePlan = async function(planId) {
+    try {
+        const userRef = doc(db, "users", managedTraineeId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            workoutPlans = data.workoutPlans || [];
+            restTime = data.restTime || 90;
+            
+            switchTab('setup');
+            selectWorkout(planId);
+            
+            customAlert(`אתה עורך כעת את התכנית של המתאמן. כל שינוי יישמר עבורו.`);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
+
+window.createNewTraineePlan = async function() {
+    try {
+        const userRef = doc(db, "users", managedTraineeId);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+            const data = userSnap.data();
+            workoutPlans = data.workoutPlans || [];
+            restTime = data.restTime || 90;
+            
+            createNewWorkout();
+            switchTab('setup');
+            
+            customAlert(`נוצרה תכנית חדשה עבור המתאמן.`);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
+
+async function renderTraineeHistory() {
+    const container = document.getElementById('trainee-history-view');
+    container.innerHTML = '<div class="empty-state"><i class="fa-solid fa-spinner fa-spin"></i> טוען...</div>';
+    
+    try {
+        const historyRef = collection(db, "users", managedTraineeId, "history");
+        const q = query(historyRef, orderBy("timestamp", "desc"), limit(20));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+            container.innerHTML = '<div class="empty-state"><p>אין היסטוריית אימונים.</p></div>';
+            return;
+        }
+        
+        container.innerHTML = '<h3>אימונים אחרונים:</h3>';
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            const date = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleDateString('he-IL') : 'תאריך לא ידוע';
+            const div = document.createElement('div');
+            div.className = 'exercise-item';
+            div.style.marginBottom = '10px';
+            div.innerHTML = `
+                <div class="exercise-info">
+                    <h4>${data.workoutName || 'אימון'}</h4>
+                    <p>${date} | ${data.duration || ''}</p>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    } catch (e) {
+        console.error("Error rendering trainee history:", e);
+    }
+}
